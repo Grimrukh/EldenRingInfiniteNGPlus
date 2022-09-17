@@ -130,7 +130,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 3.434f,
                 ["maxStaminaRate"] = 1.888f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 5f,
                 ["physicsAttackPowerRate"] = 1.902f,
                 ["magicAttackPowerRate"] = 1.902f,
                 ["fireAttackPowerRate"] = 1.902f,
@@ -153,7 +153,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 3.122f,
                 ["maxStaminaRate"] = 1.911f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 5f,
                 ["physicsAttackPowerRate"] = 1.965f,
                 ["magicAttackPowerRate"] = 1.965f,
                 ["fireAttackPowerRate"] = 1.965f,
@@ -176,7 +176,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 2.857f,
                 ["maxStaminaRate"] = 1.775f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 5f,
                 ["physicsAttackPowerRate"] = 1.768f,
                 ["magicAttackPowerRate"] = 1.768f,
                 ["fireAttackPowerRate"] = 1.768f,
@@ -199,7 +199,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 2.355f,
                 ["maxStaminaRate"] = 1.795f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 5f,
                 ["physicsAttackPowerRate"] = 1.68f,
                 ["magicAttackPowerRate"] = 1.68f,
                 ["fireAttackPowerRate"] = 1.68f,
@@ -222,7 +222,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 2.146f,
                 ["maxStaminaRate"] = 1.648f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 4f,
                 ["physicsAttackPowerRate"] = 1.609f,
                 ["magicAttackPowerRate"] = 1.609f,
                 ["fireAttackPowerRate"] = 1.609f,
@@ -245,7 +245,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 2.099f,
                 ["maxStaminaRate"] = 1.666f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 4f,
                 ["physicsAttackPowerRate"] = 1.483f,
                 ["magicAttackPowerRate"] = 1.483f,
                 ["fireAttackPowerRate"] = 1.483f,
@@ -268,7 +268,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.845f,
                 ["maxStaminaRate"] = 1.551f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 4f,
                 ["physicsAttackPowerRate"] = 1.4f,
                 ["magicAttackPowerRate"] = 1.4f,
                 ["fireAttackPowerRate"] = 1.4f,
@@ -291,7 +291,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.523f,
                 ["maxStaminaRate"] = 1.551f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 3f,
                 ["physicsAttackPowerRate"] = 1.314f,
                 ["magicAttackPowerRate"] = 1.314f,
                 ["fireAttackPowerRate"] = 1.314f,
@@ -314,7 +314,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.479f,
                 ["maxStaminaRate"] = 1.428f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 3f,
                 ["physicsAttackPowerRate"] = 1.239f,
                 ["magicAttackPowerRate"] = 1.239f,
                 ["fireAttackPowerRate"] = 1.239f,
@@ -337,7 +337,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.461f,
                 ["maxStaminaRate"] = 1.343f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 3f,
                 ["physicsAttackPowerRate"] = 1.2f,
                 ["magicAttackPowerRate"] = 1.2f,
                 ["fireAttackPowerRate"] = 1.2f,
@@ -360,7 +360,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.296f,
                 ["maxStaminaRate"] = 1.343f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 3f,
                 ["physicsAttackPowerRate"] = 1.15f,
                 ["magicAttackPowerRate"] = 1.15f,
                 ["fireAttackPowerRate"] = 1.15f,
@@ -383,7 +383,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.253f,
                 ["maxStaminaRate"] = 1.25f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 3f,
                 ["physicsAttackPowerRate"] = 1.141f,
                 ["magicAttackPowerRate"] = 1.141f,
                 ["fireAttackPowerRate"] = 1.141f,
@@ -406,7 +406,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.264f,
                 ["maxStaminaRate"] = 1.25f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 2f,
                 ["physicsAttackPowerRate"] = 1.135f,
                 ["magicAttackPowerRate"] = 1.135f,
                 ["fireAttackPowerRate"] = 1.135f,
@@ -429,7 +429,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.191f,
                 ["maxStaminaRate"] = 1.184f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 2f,
                 ["physicsAttackPowerRate"] = 1.134f,
                 ["magicAttackPowerRate"] = 1.134f,
                 ["fireAttackPowerRate"] = 1.134f,
@@ -452,7 +452,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.008f,
                 ["maxStaminaRate"] = 1.111f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 2f,
                 ["physicsAttackPowerRate"] = 1.122f,
                 ["magicAttackPowerRate"] = 1.122f,
                 ["fireAttackPowerRate"] = 1.122f,
@@ -475,7 +475,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.001f,
                 ["maxStaminaRate"] = 1.058f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 2f,
                 ["physicsAttackPowerRate"] = 1.094f,
                 ["magicAttackPowerRate"] = 1.094f,
                 ["fireAttackPowerRate"] = 1.094f,
@@ -498,7 +498,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.015f,
                 ["maxStaminaRate"] = 1.058f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 2f,
                 ["physicsAttackPowerRate"] = 1.134f,
                 ["magicAttackPowerRate"] = 1.134f,
                 ["fireAttackPowerRate"] = 1.134f,
@@ -521,7 +521,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.001f,
                 ["maxStaminaRate"] = 1.058f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 2f,
                 ["physicsAttackPowerRate"] = 1.094f,
                 ["magicAttackPowerRate"] = 1.094f,
                 ["fireAttackPowerRate"] = 1.094f,
@@ -544,7 +544,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.015f,
                 ["maxStaminaRate"] = 1.058f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 2f,
                 ["physicsAttackPowerRate"] = 1.134f,
                 ["magicAttackPowerRate"] = 1.134f,
                 ["fireAttackPowerRate"] = 1.134f,
@@ -567,7 +567,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.015f,
                 ["maxStaminaRate"] = 1.058f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 2f,
                 ["physicsAttackPowerRate"] = 1.134f,
                 ["magicAttackPowerRate"] = 1.134f,
                 ["fireAttackPowerRate"] = 1.134f,
@@ -590,7 +590,7 @@ namespace ERInfiniteNGPlus
             {
                 ["maxHpRate"] = 1.015f,
                 ["maxStaminaRate"] = 1.058f,
-                ["haveSoulRate"] = 1.1f,
+                ["haveSoulRate"] = 2f,
                 ["physicsAttackPowerRate"] = 1.134f,
                 ["magicAttackPowerRate"] = 1.134f,
                 ["fireAttackPowerRate"] = 1.134f,

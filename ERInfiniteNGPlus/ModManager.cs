@@ -96,7 +96,7 @@ namespace ERInfiniteNGPlus
                     DefaultBossRewards[row.ID] = (uint)row["bonusSoul_single"].Value;
             }   
 
-            //PrintVanillaParams();
+            PrintVanillaParams();
         }
 
         #region Public Methods
@@ -226,19 +226,18 @@ namespace ERInfiniteNGPlus
                 }
 
                 // Monitor death.
-                if (PlayerDead && Hook.PlayerHP > 0)
-                {
-                    PlayerDead = false;
-                    LogWithPrompt("# Player is alive again.");
-                }
-                    
-                else if (!PlayerDead && Hook.PlayerHP == 0)
-                {
-                    // Player has just died. Increase level.
-                    PlayerDead = true;  // wait for health to go back above zero
-                    RequestNewEffectLevel(1, isRelative: true);
-                    LogWithPrompt("# Player died. Increasing level.");
-                }
+                //if (PlayerDead && Hook.PlayerHP > 0)
+                //{
+                //    PlayerDead = false;
+                //    LogWithPrompt("# Player is alive again.");
+                //}                    
+                //else if (!PlayerDead && Hook.PlayerHP == 0)
+                //{
+                //    // Player has just died. Increase level.
+                //    PlayerDead = true;  // wait for health to go back above zero
+                //    RequestNewEffectLevel(1, isRelative: true);
+                //    LogWithPrompt("# Player died. Increasing level.");
+                //}
 
                 if (RequestedEffectLevel != CurrentEffectLevel)
                 {
