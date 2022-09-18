@@ -12,6 +12,7 @@ namespace ERInfiniteNGPlus
     internal class ModManager
     {
         public int CurrentEffectLevel { get; private set; } = 1;
+        public int AutoChangeOnDeath { get; set; } = 0;
         int RequestedEffectLevel { get; set; } = 1;
 
         Hook Hook { get; set; }
@@ -20,14 +21,16 @@ namespace ERInfiniteNGPlus
         string GameDirectory { get; set; }
         bool PlayerDead { get; set; }
         List<PARAMDEF> Paramdefs { get; }
-        PARAM SpEffectParam { get; } = null;
-        PARAM GameAreaParam { get; } = null;
+        PARAM SpEffectParam { get; set; } = null;
+        PARAM GameAreaParam { get; set; } = null;
+        PARAM CalcCorrectGraph { get; set; } = null;
 
         /// <summary>
         /// Stores addresses of all binary copies of `SpEffectParam` in game memory (usually two).
         /// </summary>
         IntPtr[] SpEffectParamAddresses { get; set; } = null;
         IntPtr[] GameAreaParamAddresses { get; set; } = null;
+        IntPtr[] CalcCorrectGraphAddresses { get; set; } = null;
 
         string GameRegulationPath => Path.Combine(GameDirectory, "regulation.bin");
         string LastLevelPath => Path.Combine(GameDirectory, "LAST_NG_LEVEL.cfg");
@@ -82,21 +85,23 @@ namespace ERInfiniteNGPlus
             Paramdefs = LoadParamdefs("Defs");  // TODO: Copy to build folder.
             Hook = new Hook(5000, 5000);
             MonitorThread = new Thread(RunMonitorThread);
+
+            BND4 gameParam = GetGameRegulation();
             
-            SpEffectParam = ReadGameParam("SpEffectParam");
-            if (SpEffectParam != null)
-                SpEffectParam.ApplyParamdefCarefully(Paramdefs);
-            GameAreaParam = ReadGameParam("GameAreaParam");
+            SpEffectParam = ReadGameParam(gameParam, "SpEffectParam");
+            
+            GameAreaParam = ReadGameParam(gameParam, "GameAreaParam");
             if (GameAreaParam != null)
             {
-                GameAreaParam.ApplyParamdefCarefully(Paramdefs);
                 DefaultBossRewards.Clear();
                 // Store default reward values that will be multiplied in memory.
                 foreach (PARAM.Row row in GameAreaParam.Rows)
                     DefaultBossRewards[row.ID] = (uint)row["bonusSoul_single"].Value;
-            }   
+            }
+            
+            CalcCorrectGraph = ReadGameParam(gameParam, "CalcCorrectGraph");
 
-            PrintVanillaParams();
+            //PrintVanillaParams();
         }
 
         #region Public Methods
@@ -135,13 +140,6 @@ namespace ERInfiniteNGPlus
         /// <returns></returns>
         public int RequestNewEffectLevel(int level, bool isRelative = false)
         {
-            if (level < 0 && !isRelative)
-            {
-                // Shouldn't be possible with player inputs anyway, since '=-X' is not a valid command.
-                Console.WriteLine("ERROR: Cannot set `level` to a negative value.");
-                return CurrentEffectLevel;
-            }
-
             int oldEffectLevel = CurrentEffectLevel;
             int newEffectLevel;
 
@@ -150,16 +148,47 @@ namespace ERInfiniteNGPlus
             else
                 newEffectLevel = level;
 
+            if (newEffectLevel < 0)
+            {
+                Console.WriteLine("NG+ level set to minimum (0).");
+                newEffectLevel = 0;
+            }
+
             if (newEffectLevel != oldEffectLevel)
             {
                 RequestedEffectLevel = newEffectLevel;
-                Console.WriteLine($"# REQUESTED NG+ LEVEL: {RequestedEffectLevel}\n");
-            }   
+                Console.WriteLine($"# REQUESTED NG+ LEVEL: {RequestedEffectLevel}");
+            }
+            else
+                Console.WriteLine($"# NG+ level is already set to {newEffectLevel}.");
 
             // Level has not been set to memory yet, but request can be documented.
             
             return newEffectLevel;
         }
+
+        public void ReloadParam(string paramName)
+        {
+            switch (paramName)
+            {
+                case "SpEffectParam":
+                    SpEffectParam = ReadGameParam(GetGameRegulation(), paramName);
+                    InjectParams(SpEffectParam, "SpEffectParam", SpEffectParamAddresses);
+                    break;
+                case "GameAreaParam":
+                    GameAreaParam = ReadGameParam(GetGameRegulation(), paramName);
+                    InjectParams(GameAreaParam, "GameAreaParam", GameAreaParamAddresses);
+                    break;
+                case "CalcCorrectGraph":
+                    CalcCorrectGraph = ReadGameParam(GetGameRegulation(), paramName);
+                    InjectParams(CalcCorrectGraph, "CalcCorrectGraph", CalcCorrectGraphAddresses);
+                    break;
+                default:
+                    Console.WriteLine($"# Invalid Param name: {paramName}");
+                    break;
+            }
+        }
+
         #endregion
 
         void ParamScan()
@@ -172,9 +201,10 @@ namespace ERInfiniteNGPlus
                 scanner.AddMemRegion(new IntPtr(offset), 0xFFFFFFF);
             }
 
+            Console.WriteLine("# Scanning for params in memory. This could take up to 30 seconds. Please wait...");
+
             // Find SpEffectParam in memory. Try vanilla Param first, then current scaling,
             // in case the game has been previously injected into by this app.
-            Console.WriteLine("# Scanning for params in memory. This could take up to 30 seconds. Please wait...");
             bool success = FindParamAddresses(SpEffectParam, "SpEffectParam", scanner, out IntPtr[] spEffectParamAddresses);
             if (!success)
             {
@@ -197,6 +227,16 @@ namespace ERInfiniteNGPlus
                 return;
             }
             GameAreaParamAddresses = gameAreaParamAddresses;
+
+            // Ditto for CalcCorrectGraph.
+            success = FindParamAddresses(CalcCorrectGraph, "CalcCorrectGraph", scanner, out IntPtr[] calcCorrectGraphAddresses);
+            if (!success)
+            {
+                Console.WriteLine("ERROR: Failed to find CalcCorrectGraph in memory. Try restarting Elden Ring and then relaunching this app.");
+                return;
+            }
+            CalcCorrectGraphAddresses = calcCorrectGraphAddresses;
+
             Console.WriteLine("# Param scan complete.");
         }
 
@@ -226,18 +266,21 @@ namespace ERInfiniteNGPlus
                 }
 
                 // Monitor death.
-                //if (PlayerDead && Hook.PlayerHP > 0)
-                //{
-                //    PlayerDead = false;
-                //    LogWithPrompt("# Player is alive again.");
-                //}                    
-                //else if (!PlayerDead && Hook.PlayerHP == 0)
-                //{
-                //    // Player has just died. Increase level.
-                //    PlayerDead = true;  // wait for health to go back above zero
-                //    RequestNewEffectLevel(1, isRelative: true);
-                //    LogWithPrompt("# Player died. Increasing level.");
-                //}
+                if (AutoChangeOnDeath)
+                {
+                    if (PlayerDead && Hook.PlayerHP > 0)
+                    {
+                        PlayerDead = false;
+                        LogWithPrompt("# Player is alive again.");
+                    }
+                    else if (!PlayerDead && Hook.PlayerHP == 0)
+                    {
+                        // Player has just died. Increase level.
+                        PlayerDead = true;  // wait for health to go back above zero
+                        RequestNewEffectLevel(1, isRelative: true);
+                        LogWithPrompt("# Player died. Increasing level.");
+                    }
+                }
 
                 if (RequestedEffectLevel != CurrentEffectLevel)
                 {
@@ -377,23 +420,27 @@ namespace ERInfiniteNGPlus
             }
         }
 
-        PARAM ReadGameParam(string name)
+        BND4 GetGameRegulation()
         {
             if (!File.Exists(GameRegulationPath))
             {
                 Console.WriteLine($"ERROR: Could not find game `regulation.bin` file: {GameRegulationPath}");
                 return null;
             }
+            return SFUtil.DecryptERRegulation(GameRegulationPath);
+        }
 
-            BND4 parambnd = SFUtil.DecryptERRegulation(GameRegulationPath);
-            
-            BinderFile paramFile = parambnd.Files.Find(x => x.Name == $@"N:\GR\data\Param\param\GameParam\{name}.param");
+        PARAM ReadGameParam(BND4 gameParam, string name)
+        {   
+            BinderFile paramFile = gameParam.Files.Find(x => x.Name == $@"N:\GR\data\Param\param\GameParam\{name}.param");
             if (paramFile == null)
             {
                 Console.WriteLine($"ERROR: Could not find `{name}.param` in `regulation.bin` params. This is very unusual.");
                 return null;
             }
-            return PARAM.Read(paramFile.Bytes);
+            PARAM param = PARAM.Read(paramFile.Bytes);
+            param.ApplyParamdefCarefully(Paramdefs);
+            return param;
         }
 
         void WriteLevelTextFile()
