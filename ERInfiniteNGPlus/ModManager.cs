@@ -12,25 +12,25 @@ namespace ERInfiniteNGPlus
     internal class ModManager
     {
         public int CurrentEffectLevel { get; private set; } = 1;
-        public int AutoChangeOnDeath { get; set; } = 0;
+        public int AutoChangeOnDeath { get; set; }
         int RequestedEffectLevel { get; set; } = 1;
 
-        Hook Hook { get; set; }
+        Hook Hook { get; }
         Thread MonitorThread { get; set; }
-        bool StopThread { get; set; } = false;
-        string GameDirectory { get; set; }
+        bool StopThread { get; set; }
+        string GameDirectory { get; }
         bool PlayerDead { get; set; }
         List<PARAMDEF> Paramdefs { get; }
-        PARAM SpEffectParam { get; set; } = null;
-        PARAM GameAreaParam { get; set; } = null;
-        PARAM CalcCorrectGraph { get; set; } = null;
+        PARAM SpEffectParam { get; set; }
+        PARAM GameAreaParam { get; set; }
+        PARAM CalcCorrectGraph { get; set; }
 
         /// <summary>
         /// Stores addresses of all binary copies of `SpEffectParam` in game memory (usually two).
         /// </summary>
-        IntPtr[] SpEffectParamAddresses { get; set; } = null;
-        IntPtr[] GameAreaParamAddresses { get; set; } = null;
-        IntPtr[] CalcCorrectGraphAddresses { get; set; } = null;
+        IntPtr[] SpEffectParamAddresses { get; set; }
+        IntPtr[] GameAreaParamAddresses { get; set; }
+        IntPtr[] CalcCorrectGraphAddresses { get; set; }
 
         string GameRegulationPath => Path.Combine(GameDirectory, "regulation.bin");
         string LastLevelPath => Path.Combine(GameDirectory, "LAST_NG_LEVEL.cfg");
@@ -38,8 +38,7 @@ namespace ERInfiniteNGPlus
         // TODO: May not always be the correct region, but is in my experience so far.
         const long ParamMemoryRegion = 0x7FF400000000;
 
-        static int[] EffectRows { get; } = new int[]  // 21 tiers
-        {
+        static int[] EffectRows { get; } = {
             7400, 7410, 7420, 7430, 7440, 7450, 7460, 7470, 7480, 7490,
             7500, 7510, 7520, 7530, 7540, 7550, 7560, 7570, 7580, 7590,
             7600,
@@ -48,8 +47,7 @@ namespace ERInfiniteNGPlus
         /// <summary>
         /// All the fields that change in NG+ effects.
         /// </summary>
-        static string[] EffectFields { get; } = new string[]
-        {
+        static string[] EffectFields { get; } = {
             "maxHpRate",
             "maxStaminaRate",
             "haveSoulRate",
@@ -72,7 +70,7 @@ namespace ERInfiniteNGPlus
             "registMadnessChangeRate",
         };
 
-        Dictionary<int, uint> DefaultBossRewards { get; } = new Dictionary<int, uint>();
+        Dictionary<long, uint> DefaultBossRewards { get; } = new Dictionary<long, uint>();
 
         void LogWithPrompt(string msg)
         {
@@ -266,7 +264,7 @@ namespace ERInfiniteNGPlus
                 }
 
                 // Monitor death.
-                if (AutoChangeOnDeath)
+                if (AutoChangeOnDeath != 0)
                 {
                     if (PlayerDead && Hook.PlayerHP > 0)
                     {
@@ -330,7 +328,7 @@ namespace ERInfiniteNGPlus
             // Update GameAreaParam.
             foreach (PARAM.Row row in GameAreaParam.Rows)
             {
-                if (!ScalingValues.BossNGRuneScaling.ContainsKey(row.ID))
+                if (!ScalingValues.BossNgRuneScaling.ContainsKey(row.ID))
                     continue;  // eg 0 or 1
                 float rewardScaling = ScalingValues.CalculateBossRewardScaling(row.ID, level);
                 int scaledReward = (int)(DefaultBossRewards[row.ID] * rewardScaling);
@@ -352,11 +350,15 @@ namespace ERInfiniteNGPlus
             if (param == null)
             {
                 Console.WriteLine($"ERROR: `{paramName}` has not been loaded. Cannot inject into memory.");
+                return;
             }
-            else if (addresses == null)
+            
+            if (addresses == null)
             {
                 Console.WriteLine($"Address of `{paramName}` is unknown. Memory not updated.");
+                return;
             }
+
             byte[] paramData = param.Write();
             foreach (IntPtr addr in addresses)
             {
@@ -476,10 +478,10 @@ namespace ERInfiniteNGPlus
         void PrintVanillaParams()
         {
             Console.WriteLine("Dictionary<int, Dictionary<string, float>> DefaultValues = new()\n{");
-            foreach (int rowID in EffectRows)
+            foreach (int rowId in EffectRows)
             {
-                PARAM.Row row = SpEffectParam.Rows.Find(x => x.ID == rowID);
-                Console.WriteLine($"    [{rowID}] = new Dictionary<string, float>()\n    {{");
+                PARAM.Row row = SpEffectParam.Rows.Find(x => x.ID == rowId);
+                Console.WriteLine($"    [{rowId}] = new Dictionary<string, float>()\n    {{");
                 foreach (string field in EffectFields)
                 {
                     object fieldValue = row[field].Value;

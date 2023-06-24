@@ -1,4 +1,7 @@
-﻿
+﻿// https://github.com/Nordgaren/Erd-Tools/blob/main/src/Erd-Tools/Hook/Offsets.cs
+// definitely supports 1.08, possibly 1.09 and 1.09.1
+
+
 namespace GameHook
 {
     public class Offsets
@@ -23,17 +26,12 @@ namespace GameHook
 
         public enum GameDataMan
         {
-            ClassWhereTheNameIsStored = 0x8
+            PlayerGameData = 0x8
         }
 
-        public enum ClassWhereTheNameIsStored
+        public enum PlayerGameData
         {
-            Name = 0x9C
-        }
-
-        public const int PlayerGameData = 0x8;
-        public enum PlayerGameDataStruct
-        {
+            Name = 0x9C,
             MaximumNormalItems = 0x414,
             InventoryCount = 0x420,
             MaximumSpecialItems = 0x424,
@@ -41,6 +39,7 @@ namespace GameHook
             HeldNormalItems = 0x450,
             HeldSpecialItems = 0x460
         }
+
         public enum ChrIns
         {
             ArmStyle = 0x328,
@@ -68,6 +67,7 @@ namespace GameHook
 
         public enum Param
         {
+            ParamFileSize = -0x10,
             TotalParamLength = 0x0,
             NameOffset = 0x10,
             TableLength = 0x30,
@@ -149,7 +149,7 @@ namespace GameHook
         public const string IsEventCallAoB = "48 83 EC 28 8B 12 85 D2";
         public const string SetEventCallAoB = "? ? ? ? ? 48 89 74 24 18 57 48 83 EC 30 48 8B DA 41 0F B6 F8 8B 12 48 8B F1 85 D2 0F 84 ? ? ? ? 45 84 C0";
 
-        public const string WorldChrManAoB = "48 8B 05 ? ? ? ? 48 85 C0 74 0F 48 39 88 ? ? ? ? 75 06 89 B1 5C 03 00 00 0F 28 05 ? ? ? ? 4C 8D 45 E7";
+        public const string WorldChrManAoB = "48 8B 05 ?? ?? ?? ?? 48 85 C0 74 0F 48 39 88";
 
         public enum WorldChrMan
         {
@@ -214,9 +214,13 @@ namespace GameHook
             /// </summary>
             EnemyData = 0x0,
             /// <summary>
+            /// IntPtr Module0x18
+            /// </summary>
+            Module0x18 = 0x18,
+            /// <summary>
             /// IntPtr ResistanceData
             /// </summary>
-            ResistenceData = 0x20,
+            ResistanceData = 0x20,
             /// <summary>
             /// IntPtr StaggerData
             /// </summary>
@@ -276,7 +280,16 @@ namespace GameHook
             /// <summary>
             /// UnicodeString[20]
             /// </summary>
-            Name = 0x1A0
+            Name = 0x1A0,
+        }
+        
+        public enum Module0x18
+        {
+            /// <summary>
+            /// int CurrentAnimation
+            /// Current animation, but not effected by frame blending
+            /// </summary>
+            CurrentAnimation = 0x20,
         }
 
         public enum ResistenceData
@@ -419,17 +432,17 @@ namespace GameHook
             CurrentAnimation = 0x90
         }
 
-        public const int PlayerInsOffset = 0x18468;
+        public const int PlayerInsOffset = 0x1E508;
 
         public enum PlayerIns
         {
-            TargetHandle = 0x6A0,
-            TargetArea = 0x6A4
+            TargetHandle = 0x6B0,
+            TargetArea = 0x6B4
         }
 
 
-        public const string DisableOpenMapAoB = "74 ? C7 45 38 58 02 00 00 C7 45 3C 02 00 00 00 C7 45 40 01 00 00 00 48 ? ? ? ? ? ? 48 89 45 48 48 8D 4D 38 E8 ? ? ? ? E9";
-        public const string CombatCloseMapAoB = "E8 ? ? ? ? 84 C0 75 ? 38 83 ? ? ? ? 75 ? 83 E7 FE";
+        public const string DisableOpenMapAoB = "74 ?? C7 45 ?? ?? ?? ?? ?? C7 45 ?? ?? ?? ?? ?? C7 45 ?? ?? ?? ?? ?? 48 8D 05 ?? ?? ?? ?? 48 89 45 ?? 48 8D 4D ?? E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 48 83 BF";
+        public const string CombatCloseMapAoB = "E8 ?? ?? ?? ?? 84 C0 75 ?? 38 83 ?? ?? ?? ?? 75 ?? 83 E7 FE";
         public const string WorldAreaWeatherAoB = "48 8B 15 ? ? ? ? 32 C0 48 85 D2 ? ? 8B 82";
 
         public enum WorldAreaWeather
@@ -443,5 +456,6 @@ namespace GameHook
         public const string CSLuaEventManagerAoB = "48 83 3D ? ? ? ? 00 48 8B F9 0F 84 ? ? ? ? 48";
         public const string LuaWarp_01AoB = "C3 ? ? ? ? ? ? 57 48 83 EC ? 48 8B FA 44";
 
+        public const string GetChrInsFromHandle = "48 83 EC 28 E8 17 FF FF FF 48 85 C0 74 08 48 8B 00 48 83 C4 28 C3";
     }
 }

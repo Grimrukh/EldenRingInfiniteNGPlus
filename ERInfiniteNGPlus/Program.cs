@@ -6,15 +6,15 @@ using System.Windows.Forms;
 
 namespace ERInfiniteNGPlus
 {
-    static class Program
+    internal static class Program
     {        
-        static string TitleText { get; } = @"
+        static string TitleText => @"
 
                                   E L D E N   R I N G
 
                        I N F I N I T E   N E W   G A M E   P L U S
 
-                                         v1.0
+                                         v1.1
                                     
                                       by Grimrukh
 
@@ -53,7 +53,7 @@ namespace ERInfiniteNGPlus
         standard NG+ SpEffect scaling rows (7400-7600) are present!
 ";
 
-        static string InfoText { get; } = @"
+        static string InfoText => @"
         Standard scaling is applied from NG+1 to NG+7, except for boss rune
         rewards, which will be slightly above the normal values (I haven't
         determined precisely how the game changes these yet).
@@ -138,89 +138,81 @@ namespace ERInfiniteNGPlus
 
                 Console.Write(">> ");
                 string cmd = Console.ReadLine();
-                
-                if (cmd != null)
+
+                switch (cmd)
                 {
-                    if (cmd == "info")
-                    {
+                    case null:
+                        continue;
+                    case "info":
                         Console.WriteLine(InfoText);
                         continue;
-                    }
+                }
 
-                    Match match;
-
-                    match = DeathRe.Match(cmd);
-                    if (match.Success)
+                Match match = DeathRe.Match(cmd);
+                if (match.Success)
+                {
+                    try
                     {
-                        try
-                        {
-                            Manager.AutoChangeOnDeath = int.Parse(match.Groups[1].Value);
-                            Console.WriteLine($"NG+ level will change by {Manager.AutoChangeOnDeath} upon death.");
-                            continue;
-                        }
-                        catch (FormatException)
-                        {
-                            Console.WriteLine($"Invalid command. Could not parse number: {match.Groups[1].Value}");
-                            continue;
-                        }
-                    }
-
-                    match = ReloadRe.Match(cmd);
-                    if (match.Success)
-                    {
-                        // Read given param in regulation and reload it.
-                        Manager.ReloadParam(match.Groups[1].Value);
-                        Thread.Sleep(500);  // allow time for output to print
+                        Manager.AutoChangeOnDeath = int.Parse(match.Groups[1].Value);
+                        Console.WriteLine($"NG+ level will change by {Manager.AutoChangeOnDeath} upon death.");
                         continue;
                     }
-
-                    match = SetLevelRe.Match(cmd);
-                    if (match.Success)
+                    catch (FormatException)
                     {
-                        int level = int.Parse(match.Groups[2].Value);
-                        switch (match.Groups[1].Value)
-                        {
-                            case "+":
-                                Console.WriteLine($"Increment by {level}");
-                                Manager.RequestNewEffectLevel(level, isRelative: true);
-                                break;
-                            case "-":
-                                Console.WriteLine($"Decrement by {level}");
-                                Manager.RequestNewEffectLevel(-level, isRelative: true);
-                                break;
-                            case "=":
-                                Console.WriteLine($"Set to {level}");
-                                Manager.RequestNewEffectLevel(level, isRelative: false);
-                                break;
-                            default:
-                                break;
-                        }
-                        Thread.Sleep(500);  // allow time for output to print
+                        Console.WriteLine($"Invalid command. Could not parse number: {match.Groups[1].Value}");
+                        continue;
                     }
-                    else
-                        Console.WriteLine("Invalid command.");
                 }
+
+                match = ReloadRe.Match(cmd);
+                if (match.Success)
+                {
+                    // Read given param in regulation and reload it.
+                    Manager.ReloadParam(match.Groups[1].Value);
+                    Thread.Sleep(500);  // allow time for output to print
+                    continue;
+                }
+
+                match = SetLevelRe.Match(cmd);
+                if (match.Success)
+                {
+                    int level = int.Parse(match.Groups[2].Value);
+                    switch (match.Groups[1].Value)
+                    {
+                        case "+":
+                            Console.WriteLine($"Increment by {level}");
+                            Manager.RequestNewEffectLevel(level, isRelative: true);
+                            break;
+                        case "-":
+                            Console.WriteLine($"Decrement by {level}");
+                            Manager.RequestNewEffectLevel(-level, isRelative: true);
+                            break;
+                        case "=":
+                            Console.WriteLine($"Set to {level}");
+                            Manager.RequestNewEffectLevel(level, isRelative: false);
+                            break;
+                    }
+                    Thread.Sleep(500);  // allow time for output to print
+                }
+                else
+                    Console.WriteLine("Invalid command.");
             }
         }
 
         static string SetGameDir(string saveToFile = "")
         {
-            OpenFileDialog ofd = new OpenFileDialog
+            var ofd = new OpenFileDialog
             {
                 Filter = "EXE Files|*.exe"
             };
 
-            if (ofd.ShowDialog() == DialogResult.OK)
-            {
-                string name = Path.GetDirectoryName(ofd.FileName) + "\\";
-                if (saveToFile != "")
-                    File.WriteAllText(saveToFile, name);
-                return name;
-            }
-            else
-            {
-                return "";
-            }
+            if (ofd.ShowDialog() != DialogResult.OK) return "";
+            
+            string name = Path.GetDirectoryName(ofd.FileName) + "\\";
+            if (saveToFile != "")
+                File.WriteAllText(saveToFile, name);
+            return name;
+
         }
     }
 }

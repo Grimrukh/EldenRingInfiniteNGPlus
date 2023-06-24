@@ -1,13 +1,4 @@
-﻿using System.Collections;
-using System;
-using System.Collections.Generic;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
-using System.ComponentModel.Design;
-using System.IO;
-using System.Net.NetworkInformation;
-using System.Security.Cryptography;
-using System.Security.Policy;
-using System.Threading;
+﻿using System.Collections.Generic;
 
 namespace ERInfiniteNGPlus
 {
@@ -18,38 +9,39 @@ namespace ERInfiniteNGPlus
         /// 
         /// This returns the exact value that should be saved in SpEffectParam.
         /// </summary>
+        /// <param name="rowId"></param>
         /// <param name="fieldName"></param>
         /// <param name="ngPlusLevel"></param>
         /// <returns></returns>
-        public static float CalculateScaling(int rowID, string fieldName, int ngPlusLevel)
+        public static float CalculateScaling(int rowId, string fieldName, int ngPlusLevel)
         {
             if (ngPlusLevel == 0)
             {
                 return 1f;  // no scaling (like NG)
             }
-            else if (ngPlusLevel == 1)
+
+            if (ngPlusLevel == 1)
             {
-                return AreaInitialScaling[rowID][fieldName];
+                return AreaInitialScaling[rowId][fieldName];
             }
-            else if (ngPlusLevel <= 7)
+            if (ngPlusLevel <= 7)
             {
-                return AreaInitialScaling[rowID][fieldName] * DefaultAdditionalScaling[fieldName][ngPlusLevel - 2];
+                return AreaInitialScaling[rowId][fieldName] * DefaultAdditionalScaling[fieldName][ngPlusLevel - 2];
             }
-            else  // to infinity and beyond
-            {
-                float defaultScaling = DefaultAdditionalScaling[fieldName][5];  // for NG+7
-                float additiveScaling = (ngPlusLevel - 7) * CustomAdditionalScaling[fieldName];
-                return AreaInitialScaling[rowID][fieldName] * (defaultScaling + additiveScaling);
-            }
+
+            // to infinity and beyond
+            float defaultScaling = DefaultAdditionalScaling[fieldName][5];  // for NG+7
+            float additiveScaling = (ngPlusLevel - 7) * CustomAdditionalScaling[fieldName];
+            return AreaInitialScaling[rowId][fieldName] * (defaultScaling + additiveScaling);
         }
 
         /// <summary>
         /// Returns the value that should be used to multiply the 'bonus soul' fields in GameAreaParam.
         /// </summary>
-        /// <param name="rowID"></param>
+        /// <param name="rowId"></param>
         /// <param name="ngPlusLevel"></param>
         /// <returns></returns>
-        public static float CalculateBossRewardScaling(int rowID, int ngPlusLevel)
+        public static float CalculateBossRewardScaling(long rowId, int ngPlusLevel)
         {
             // TODO: The game probably applies the base NG+ scaling by default, and I
             //  probably only need to scale the GameAreaParam by the additional amount.
@@ -59,42 +51,42 @@ namespace ERInfiniteNGPlus
             }
             else if (ngPlusLevel == 1)
             {
-                return BossNGRuneScaling[rowID];
+                return BossNgRuneScaling[rowId];
             }
             else if (ngPlusLevel <= 7)
             {
-                return BossNGRuneScaling[rowID] * DefaultAdditionalScaling["haveSoulRate"][ngPlusLevel - 2];
+                return BossNgRuneScaling[rowId] * DefaultAdditionalScaling["haveSoulRate"][ngPlusLevel - 2];
             }
             else  // to infinity and beyond
             {
                 float defaultScaling = DefaultAdditionalScaling["haveSoulRate"][5];  // for NG+7
                 float additiveScaling = (ngPlusLevel - 7) * CustomAdditionalScaling["haveSoulRate"];
-                return BossNGRuneScaling[rowID] * (defaultScaling + additiveScaling);
+                return BossNgRuneScaling[rowId] * (defaultScaling + additiveScaling);
             }
         }
 
-        public static Dictionary<string, float[]> DefaultAdditionalScaling { get; } = new Dictionary<string, float[]>()
+        public static Dictionary<string, float[]> DefaultAdditionalScaling { get; } = new Dictionary<string, float[]>
         {
-            ["maxHpRate"] = new float[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.4f },
-            ["maxStaminaRate"] = new float[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.4f },  // not given in online table; copied from HP
-            ["haveSoulRate"] = new float[] { 1.1f, 1.125f, 1.2f, 1.225f, 1.25f, 1.275f },
-            ["physicsAttackPowerRate"] = new float[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
-            ["magicAttackPowerRate"] = new float[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
-            ["fireAttackPowerRate"] = new float[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
-            ["thunderAttackPowerRate"] = new float[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
-            ["physicsDiffenceRate"] = new float[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
-            ["magicDiffenceRate"] = new float[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
-            ["fireDiffenceRate"] = new float[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
-            ["thunderDiffenceRate"] = new float[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
-            ["staminaAttackRate"] = new float[] { 1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f },
-            ["registPoizonChangeRate"] = new float[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-            ["registDiseaseChangeRate"] = new float[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-            ["registBloodChangeRate"] = new float[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-            ["darkDiffenceRate"] = new float[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
-            ["darkAttackPowerRate"] = new float[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-            ["registFreezeChangeRate"] = new float[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-            ["registSleepChangeRate"] = new float[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-            ["registMadnessChangeRate"] = new float[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
+            ["maxHpRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.4f },
+            ["maxStaminaRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.4f },  // not given in online table; copied from HP
+            ["haveSoulRate"] = new[] { 1.1f, 1.125f, 1.2f, 1.225f, 1.25f, 1.275f },
+            ["physicsAttackPowerRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
+            ["magicAttackPowerRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
+            ["fireAttackPowerRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
+            ["thunderAttackPowerRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
+            ["physicsDiffenceRate"] = new[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
+            ["magicDiffenceRate"] = new[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
+            ["fireDiffenceRate"] = new[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
+            ["thunderDiffenceRate"] = new[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
+            ["staminaAttackRate"] = new[] { 1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f },
+            ["registPoizonChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
+            ["registDiseaseChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
+            ["registBloodChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
+            ["darkDiffenceRate"] = new[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
+            ["darkAttackPowerRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
+            ["registFreezeChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
+            ["registSleepChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
+            ["registMadnessChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
         };
 
         /// <summary>
@@ -611,7 +603,7 @@ namespace ERInfiniteNGPlus
             },
         };
 
-        public static Dictionary<int, float> BossNGRuneScaling = new Dictionary<int, float>()
+        public static readonly Dictionary<long, float> BossNgRuneScaling = new Dictionary<long, float>()
         {
             [10000800] = 4f,  // Godrick the Grafted - Stormveil Castle
             [10000850] = 4f,  // Margit, the Fell Omen - Stormveil Castle
