@@ -2,7 +2,7 @@
 
 namespace EldenRingInfiniteNGPlus;
 
-internal static class Program
+internal static partial class Program
 {        
     static string TitleText => @"
 
@@ -10,7 +10,7 @@ internal static class Program
 
                        I N F I N I T E   N E W   G A M E   P L U S
 
-                                         v1.1
+                                         v2.0
                                     
                                       by Grimrukh
 
@@ -33,9 +33,7 @@ internal static class Program
         Commands:
             `=N`: Set NG+ level to exactly N (minimum of zero).
             `-N`: Decrease NG+ level by N (minimum of zero).
-            `+N`: Increase NG+ level by N.
-            `death N`: Set NG+ level to automatically change by `N` upon death.
-                Use `death 0` to disable. `N` can be negative.
+            `+N`: Increase NG+ level by N (no maximum!).
             `info`: See detailed information about the stat scaling that will be 
                 applied by the mod at NG+8 and beyond.
 
@@ -44,9 +42,12 @@ internal static class Program
         the NG+ level to 1 next time you run this executable.
 
         This mod does NOT edit `regulation.bin` or any other game files -- only
-        running game memory -- and uses its own base scaling NG+ values. You 
-        are free to edit `regulation.bin` with other mods, but make sure the 
-        standard NG+ SpEffect scaling rows (7400-7600) are present!
+        running game memory. The only requirements for compatibility with other
+        mods is that rows 7410-7600 (increments of 10) are present in 
+        `SpEffectParam`, which are the NG+ scaling values modified in real time,
+        and that the boss rune rewards in `GameAreaParam` are present (whatever
+        values are found there will be scaled). As long as these two conditions
+        are met, you are free to edit `regulation.bin` with other mods!
 ";
 
     static string InfoText => @"
@@ -69,7 +70,7 @@ internal static class Program
             Resistance: 0.015 (all)
 ";
 
-    static InfiniteNGPlusManager Manager { get; set; }
+    static InfiniteNGPlusManager? Manager { get; set; }
 
     /// <summary>
     /// Hooks into `ELDENRING.exe`, finds the `SpEffectParam` rows that buff enemies in New Game Plus,
@@ -118,22 +119,20 @@ internal static class Program
         Console.ReadLine();
     }
 
-    static Regex SetLevelRe { get; } = new Regex(@"([+-=])(\d+)");
-    static Regex ReloadRe { get; } = new Regex(@"reload (\w+)");
-    static Regex DeathRe { get; } = new Regex(@"death ([-\d]+)");
-
+    static Regex SetLevelRe { get; } = SetLevelRegex();
+    
     static void GetPlayerCommands()
     {
         while (true)
         {
             if (Manager == null)
             {
-                Console.WriteLine("ModManager not running. Aborting.");
-                break;
+                Console.WriteLine("Manager is null. Exiting.");
+                return;
             }
-
+            
             Console.Write(">> ");
-            string cmd = Console.ReadLine();
+            string? cmd = Console.ReadLine();
 
             switch (cmd)
             {
@@ -143,33 +142,8 @@ internal static class Program
                     Console.WriteLine(InfoText);
                     continue;
             }
-
-            Match match = DeathRe.Match(cmd);
-            if (match.Success)
-            {
-                try
-                {
-                    Manager.AutoChangeOnDeath = int.Parse(match.Groups[1].Value);
-                    Console.WriteLine($"NG+ level will change by {Manager.AutoChangeOnDeath} upon death.");
-                    continue;
-                }
-                catch (FormatException)
-                {
-                    Console.WriteLine($"Invalid command. Could not parse number: {match.Groups[1].Value}");
-                    continue;
-                }
-            }
-
-            match = ReloadRe.Match(cmd);
-            if (match.Success)
-            {
-                // Read given param in regulation and reload it.
-                Manager.ReloadParam(match.Groups[1].Value);
-                Thread.Sleep(500);  // allow time for output to print
-                continue;
-            }
-
-            match = SetLevelRe.Match(cmd);
+            
+            Match match = SetLevelRe.Match(cmd);
             if (match.Success)
             {
                 int level = int.Parse(match.Groups[2].Value);
@@ -177,15 +151,15 @@ internal static class Program
                 {
                     case "+":
                         Console.WriteLine($"Increment by {level}");
-                        Manager.RequestNewEffectLevel(level, isRelative: true);
+                        Manager.RequestEffectLevelChange(level);
                         break;
                     case "-":
                         Console.WriteLine($"Decrement by {level}");
-                        Manager.RequestNewEffectLevel(-level, isRelative: true);
+                        Manager.RequestEffectLevelChange(-level);
                         break;
                     case "=":
                         Console.WriteLine($"Set to {level}");
-                        Manager.RequestNewEffectLevel(level, isRelative: false);
+                        Manager.RequestEffectLevel(level);
                         break;
                 }
                 Thread.Sleep(500);  // allow time for output to print
@@ -194,4 +168,23 @@ internal static class Program
                 Console.WriteLine("Invalid command.");
         }
     }
+    
+    static string SetGameDir(string saveToFile = "")
+    {
+        var ofd = new OpenFileDialog
+        {
+            Filter = "EXE Files|*.exe",
+        };
+
+        if (ofd.ShowDialog() != DialogResult.OK) return "";
+            
+        string name = Path.GetDirectoryName(ofd.FileName) + "\\";
+        if (saveToFile != "")
+            File.WriteAllText(saveToFile, name);
+        return name;
+
+    }
+    
+    [GeneratedRegex(@"([+-=])(\d+)")]
+    private static partial Regex SetLevelRegex();
 }

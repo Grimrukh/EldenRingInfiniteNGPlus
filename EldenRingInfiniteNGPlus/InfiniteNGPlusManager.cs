@@ -1,4 +1,5 @@
-﻿using EldenRingBase.Events;
+﻿using EldenRingBase;
+using EldenRingBase.Memory;
 using EldenRingBase.GameHook;
 using EldenRingBase.Params;
 using SoulsFormats;
@@ -15,14 +16,13 @@ namespace EldenRingInfiniteNGPlus;
 ///     - These just enable flags that are picked up here.
 ///  - No need to improve/enable player death trigger system... But may as well retain.
 /// </summary>
-internal class InfiniteNGPlusManager
+public class InfiniteNGPlusManager
 {
     public int CurrentEffectLevel { get; private set; } = 1;
     
     string LastLevelPath { get; }
     int RequestedEffectLevel { get; set; } = 1;
 
-    LogFile LogFile { get; }
     EldenRingHook Hook { get; }
     Thread? MonitorThread { get; set; }
     bool StopThread { get; set; }
@@ -44,7 +44,6 @@ internal class InfiniteNGPlusManager
     /// <param name="gameDirectory"></param>
     public InfiniteNGPlusManager(string gameDirectory)
     {
-        LogFile = new LogFile(Path.Combine(gameDirectory, "InfiniteNGPlus.log"));
         LastLevelPath = Path.Combine(gameDirectory, "InfiniteNGPlusLevel.txt");
         
         Hook = new EldenRingHook(5000, 5000);
@@ -53,12 +52,11 @@ internal class InfiniteNGPlusManager
         FlagManager = new FlagManager(Hook);
         
         List<PARAMDEF> paramdefs = ParamReader.GetParamdefs();
-        ParamManager = new ParamManager(Hook, paramdefs);
+        ParamManager = new ParamManager(gameDirectory, Hook, paramdefs);
         
         // We need to read the regulation to get some default values for NG+ scaling.
-        string regulationPath = Path.Combine(gameDirectory, "regulation.bin");
-        BND4 gameParamBnd = SFUtil.DecryptERRegulation(regulationPath);
-        PARAM gameAreaParam = ParamReader.ReadParamType(gameParamBnd, "GameAreaParam");
+        ParamReader paramReader = new(ParamManager.Regulation);
+        PARAM gameAreaParam = paramReader.ReadParamType(ParamType.GameAreaParam);
         DefaultBossRewards = new Dictionary<long, uint>();
         // Store default reward values that will be multiplied in memory.
         foreach (PARAM.Row row in gameAreaParam.Rows)
@@ -101,12 +99,12 @@ internal class InfiniteNGPlusManager
     /// </summary>
     /// <param name="levelChange"></param>
     /// <returns></returns>
-    public int RequestNewGamePlusLevelChange(int levelChange)
+    public int RequestEffectLevelChange(int levelChange)
     {
         if (levelChange == 0)
             return CurrentEffectLevel;
 
-        return RequestNewEffectLevel(CurrentEffectLevel + levelChange);
+        return RequestEffectLevel(CurrentEffectLevel + levelChange);
     }
 
     /// <summary>
@@ -114,22 +112,22 @@ internal class InfiniteNGPlusManager
     /// </summary>
     /// <param name="level"></param>
     /// <returns></returns>
-    public int RequestNewEffectLevel(int level)
+    public int RequestEffectLevel(int level)
     {
         if (level < 0)
         {
-            LogFile.Log("NG+ level request clamped to minimum (0).");
+            Logging.InfoPrint("NG+ level request clamped to minimum (0).");
             level = 0;
         }
 
         if (level == CurrentEffectLevel)
         {
-            LogFile.Log($"# NG+ level is already set to {level}.");
+            Logging.InfoPrint($"# NG+ level is already set to {level}.");
             return level;
         }
 
         RequestedEffectLevel = level;
-        LogFile.Log($"NG+ level requested: {RequestedEffectLevel}");
+        Logging.InfoPrint($"NG+ level requested: {RequestedEffectLevel}");
 
         // Level has not been set to memory yet, but request can be documented.
             
@@ -162,7 +160,7 @@ internal class InfiniteNGPlusManager
             }
             CurrentEffectLevel = RequestedEffectLevel;
             UpdateParams(CurrentEffectLevel);
-            LogFile.Log($"NG+ level updated: {CurrentEffectLevel}"); 
+            Logging.InfoPrint($"NG+ level updated: {CurrentEffectLevel}"); 
             WriteLevelTextFile();  // store mod state
             
             Thread.Sleep(100);
@@ -188,18 +186,23 @@ internal class InfiniteNGPlusManager
         }
 
         // Update GameAreaParam boss rune rewards.
-        ParamInMemory gameAreaParam = ParamManager.GetParam(ParamType.GameAreaParam);
+        ParamInMemory? gameAreaParam = ParamManager.GetParam(ParamType.GameAreaParam);
+        if (gameAreaParam == null)
+        {
+            Logging.ErrorPrint("Failed to read GameAreaParam from ELDEN RING game memory.");
+            return;
+        }
         foreach ((long bossRowID, float runeScaling) in ScalingValues.BossNgRuneScaling)
         {
             int defaultRunes = (int)DefaultBossRewards[bossRowID];
-            float rewardScaling = ScalingValues.CalculateStackedScaling(bossRowID, "haveSoulRate", level);
+            float rewardScaling = ScalingValues.CalculateStackedScaling(runeScaling, "haveSoulRate", level);
             uint scaledReward = (uint)(defaultRunes * rewardScaling);
             
             gameAreaParam.FastSet((int)bossRowID, "bonusSoul_single", scaledReward);
             gameAreaParam.FastSet((int)bossRowID, "bonusSoul_multi", scaledReward);
 
             if (bossRowID == 18000850)  // Soldier of Godrick
-                LogFile.LogDebug($"Soldier of Godrick reward: {scaledReward}");
+                Logging.DebugPrint($"Soldier of Godrick reward: {scaledReward}");
         }
     }
 
