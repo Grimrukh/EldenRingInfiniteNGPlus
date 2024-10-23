@@ -1,0 +1,6 @@
+[submodule "Dependencies/SoulsFormats"]
+	path = Dependencies/SoulsFormats
+	url = git@github.com:Grimrukh/SoulsFormats.git
+[submodule "Dependencies/PropertyHook"]
+	path = Dependencies/PropertyHook
+	url = git@github.com:Grimrukh/PropertyHook.git
