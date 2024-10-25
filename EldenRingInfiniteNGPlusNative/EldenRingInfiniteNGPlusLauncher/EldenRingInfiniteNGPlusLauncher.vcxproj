@@ -86,7 +86,7 @@
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(TargetDir)lib"
-xcopy /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-windows\*" "$(TargetDir)lib"</Command>
+xcopy /s /e /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-windows\*" "$(TargetDir)lib"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -109,7 +109,7 @@ xcopy /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(TargetDir)lib"
-xcopy /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-windows\*" "$(TargetDir)lib"</Command>
+xcopy /s /e /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-windows\*" "$(TargetDir)lib"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -128,7 +128,7 @@ xcopy /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(TargetDir)lib"
-xcopy /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-windows\*" "$(TargetDir)lib"</Command>
+xcopy /s /e /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-windows\*" "$(TargetDir)lib"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -151,7 +151,7 @@ xcopy /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-
     </Link>
     <PostBuildEvent>
       <Command>mkdir "$(TargetDir)lib"
-xcopy /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-windows\*" "$(TargetDir)lib"</Command>
+xcopy /s /e /Y /I "$(SolutionDir)..\InfiniteNGPlusConsole\bin\$(Configuration)\net8.0-windows\*" "$(TargetDir)lib"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

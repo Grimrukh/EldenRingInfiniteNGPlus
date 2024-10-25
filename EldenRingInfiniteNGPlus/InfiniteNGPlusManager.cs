@@ -18,6 +18,11 @@ public class InfiniteNGPlusManager : GameMonitor
 {
     protected override int UpdateInterval => 100;
     string LastLevelPath { get; }
+    const int TextSearchInterval = 10000; 
+    const int TextSearchMaxAttempts = 5; 
+    int TextSearchAttempts { get; set; }
+    long LastTextSearchTime { get; set; }
+    Thread? TextSearchThread { get; set; }
     
     int? LastSetEffectLevel { get; set; }
     int? RequestedEffectLevel { get; set; }
@@ -69,49 +74,25 @@ public class InfiniteNGPlusManager : GameMonitor
         Hook.OnUnhooked += OnUnhooked;
     }
     
-    /// <summary>
-    /// TODO: Would be great to get real FMG resource offsets.
-    /// </summary>
-    /// <param name="o"></param>
-    /// <param name="e"></param>
     void OnHooked(object? o, EventArgs? e)
     {
         if (!EditLevelText)
-            return;  // nothing to do
-
-        // We search from 0x7FF3... up to the MainModule.
-        IntPtr startAddr = (IntPtr)0x7FF300000000;
-        if (Hook.MainModuleBaseAddress < startAddr)
-        {
-            Logging.Warning("Process main module base address lower than expected. NG+ text update will fail.");
             return;
-        }
-        ulong regionSize = (ulong)((long)Hook.MainModuleBaseAddress - startAddr);  // guaranteed cast by above check
-        // Convert string 'Current NG Level:' to a Unicode byte array.
-        byte[] textAOB = Encoding.Unicode.GetBytes("Current NG Level: ");
-        Logging.Info("Searching for 'Current NG Level: ' string in game memory (may take ~10 seconds)...");
-        IntPtr levelTextPointer = AOBChunkScanner.SearchMemory(Hook.Process, startAddr, regionSize, textAOB);
-        if (levelTextPointer != IntPtr.Zero)
-        {
-            LevelTextPointer = levelTextPointer;
-            // Find length of level text by finding first double null bytes.
-            int byteCount = 0;
-            while (Kernel32.ReadByte(Hook.Process.Handle, levelTextPointer + byteCount) != 0 ||
-                   Kernel32.ReadByte(Hook.Process.Handle, levelTextPointer + byteCount + 1) != 0)
-                byteCount += 2;
-
-            // Length is in bytes, so divide by 2 to get Unicode character count.
-            LevelTextLength = byteCount / 2;
-            Logging.Info($"--> Success. NG+ Level text will be updated in-game with max length {LevelTextLength}.");
-            return;
-        }
-        Logging.Error("--> Failed to find NG+ level text in game memory. NG+ level will not be displayed in-game.");
+        
+        // Initial text search.
+        TextSearchAttempts++;
+        Logging.Info($"Attempting to find NG+ level text in memory ({TextSearchAttempts} / {TextSearchMaxAttempts})...");
+        LastTextSearchTime = 0;  // second attempt will start right away
+        // Wait 5 seconds before searching for text pointer to let FMGs load.
+        TextSearchThread = new Thread(() => FindTextPointer(5000)) { IsBackground = true };
+        TextSearchThread.Start();
     }
     
     void OnUnhooked(object? o, EventArgs? e)
     {
         LevelTextPointer = IntPtr.Zero;
         LevelTextLength = 0;
+        TextSearchAttempts = 0;
     }
 
     #region Public Methods
@@ -165,6 +146,16 @@ public class InfiniteNGPlusManager : GameMonitor
         }
         
         CheckFlagRequests();
+
+        // Check if we should look for text pointer again.
+        if (ShouldLookForTextPointer(updateTime))
+        {
+            TextSearchAttempts++;
+            Logging.Info($"Attempting to find NG+ level text in memory ({TextSearchAttempts} / {TextSearchMaxAttempts})...");
+            LastTextSearchTime = updateTime;
+            TextSearchThread = new Thread(() => FindTextPointer(0)) { IsBackground = true };
+            TextSearchThread.Start();
+        }
         
         if (RequestedEffectLevel == null)
             return true;  // no request to process
@@ -268,6 +259,15 @@ public class InfiniteNGPlusManager : GameMonitor
         }
     }
 
+    bool ShouldLookForTextPointer(long updateTime)
+    {
+        return EditLevelText
+               && LevelTextPointer == IntPtr.Zero
+               && TextSearchThread is not { IsAlive: true }
+               && updateTime - LastTextSearchTime > TextSearchInterval
+               && TextSearchAttempts < TextSearchMaxAttempts;
+    }
+
     static void UpdateBossReward(ParamInMemory gameAreaParam, int bossRowID, int level)
     {
         // NOTE: NG+1 boss reward scaling seems to be 0.0125 * x^2, where x is the base reward.
@@ -330,6 +330,45 @@ public class InfiniteNGPlusManager : GameMonitor
         }
         // Write bytes to found text address.
         Kernel32.WriteBytes(Hook.Process.Handle, LevelTextPointer, levelTextBytes);
+    }
+
+    void FindTextPointer(int delay)
+    {
+        if (delay > 0)
+            Thread.Sleep(delay);
+        
+        // We search from 0x7FF3... up to the MainModule.
+        IntPtr startAddr = (IntPtr)0x7FF300000000;
+        if (Hook.MainModuleBaseAddress < startAddr)
+        {
+            Logging.Warning("Process main module base address lower than expected. NG+ text update will fail.");
+            return;
+        }
+        ulong regionSize = (ulong)((long)Hook.MainModuleBaseAddress - startAddr);  // guaranteed cast by above check
+        // Convert string 'Current NG Level:' to a Unicode byte array.
+        byte[] textAOB = Encoding.Unicode.GetBytes("Current NG Level: ");
+        Logging.Info("Searching for 'Current NG Level: ' string in game memory (may take ~10 seconds)...");
+        IntPtr levelTextPointer = AOBChunkScanner.SearchMemory(Hook.Process, startAddr, regionSize, textAOB);
+        if (levelTextPointer != IntPtr.Zero)
+        {
+            LevelTextPointer = levelTextPointer;
+            // Find length of level text by finding first double null bytes.
+            int byteCount = 0;
+            while (Kernel32.ReadByte(Hook.Process.Handle, levelTextPointer + byteCount) != 0 ||
+                   Kernel32.ReadByte(Hook.Process.Handle, levelTextPointer + byteCount + 1) != 0)
+                byteCount += 2;
+
+            // Length is in bytes, so divide by 2 to get Unicode character count.
+            LevelTextLength = byteCount / 2;
+            Logging.Info($"--> Success. NG+ Level text will be updated in-game with max length {LevelTextLength}.");
+            
+            // If we have a last level set, update it now.
+            if (LastSetEffectLevel != null)
+                UpdateText(LastSetEffectLevel.Value);
+            
+            return;
+        }
+        Logging.Error("--> Failed to find NG+ level text in game memory. NG+ level will not be displayed in-game.");
     }
 
     void WriteLevelTextFile()

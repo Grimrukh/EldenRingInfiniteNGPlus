@@ -176,11 +176,7 @@ internal static partial class Program
         while (!Hook.Hooked)
             Thread.Sleep(100);
         Logging.Info("--> Connected to ELDEN RING successfully.");
-        
-        Logging.Info("Loading SpEffectParam and GameAreaParam...");
-        ParamManager!.GetParam(ParamType.SpEffectParam);
-        ParamManager!.GetParam(ParamType.GameAreaParam);
-        Logging.Info("--> Params loaded successfully.");
+        // NOTE: We don't load PARAMs here. They are fast to load on first use.
 
         UpdateCts = new CancellationTokenSource();
         UpdateThread = new Thread(() => Update(UpdateCts))
@@ -212,11 +208,7 @@ internal static partial class Program
                     UpdateTimeMs += 100;
                 }
                 Logging.Info("--> Reconnected to ELDEN RING successfully.");
-                
-                Logging.Info("Loading SpEffectParam and GameAreaParam...");
-                ParamManager.GetParam(ParamType.SpEffectParam);
-                ParamManager.GetParam(ParamType.GameAreaParam);
-                Logging.Info("--> Params loaded successfully.");
+                // NOTE: We don't load PARAMs here. They are fast to load on first use.
             }
         
             // Update monitors.
