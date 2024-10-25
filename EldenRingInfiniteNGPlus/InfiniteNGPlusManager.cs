@@ -1,169 +1,203 @@
-﻿using EldenRingBase;
+﻿using System.Text;
+using EldenRingBase;
 using EldenRingBase.Memory;
 using EldenRingBase.GameHook;
 using EldenRingBase.Params;
+using PropertyHook;
 using SoulsFormats;
 
 namespace EldenRingInfiniteNGPlus;
 
 /// <summary>
-/// TODO: Bring over advanced WarBetween tech, particularly Param and Flag management.
-///  - Should never need to WRITE regulation. But will READ default values from it.
-///  - Maybe check the value of some field of some dummy param as a way to detect prior injection?
-///  - Or, forget about it, since we're just overwriting previous values from mod-managed (and recorded) NG+ level
-///    anyway.
-///  - Then, write Site of Grace TalkESD (use ESDLang) for level adjustment options.
-///     - These just enable flags that are picked up here.
-///  - No need to improve/enable player death trigger system... But may as well retain.
+/// Exposes methods and event flag checks for applying "infinite" NG+ levels to the game.
+///
+/// Affects the NG+ SpEffectParam area scaling and boss rewards. Does NOT yet affect c0000 characters that use special
+/// scaling effects.
 /// </summary>
-public class InfiniteNGPlusManager
+public class InfiniteNGPlusManager : GameMonitor
 {
-    public int CurrentEffectLevel { get; private set; } = 1;
-    
+    protected override int UpdateInterval => 100;
     string LastLevelPath { get; }
-    int RequestedEffectLevel { get; set; } = 1;
+    
+    int? LastSetEffectLevel { get; set; }
+    int? RequestedEffectLevel { get; set; }
 
     EldenRingHook Hook { get; }
-    Thread? MonitorThread { get; set; }
-    bool StopThread { get; set; }
     ParamManager ParamManager { get; }
     FlagManager FlagManager { get; }
 
-    // TODO: Set request flags for +1, +5, +10, etc. May as well sync with Grace menu options.
-    const uint RequestFlag = 1;
-    
-    // TODO: I'm not using the latest FlagManager, which I rewrote at the 11th hour to NOT use ASM
-    //  injection, but instead access the arrays directly!
-    // TODO: That also means EldenRingBase may actually be out of date in other areas... Check commits.
-    
-    Dictionary<long, uint> DefaultBossRewards { get; }
-
     /// <summary>
-    /// TODO: Side-load this, and pass in game directory.
+    /// User can add (flag, +/- level) pairs to this dictionary to request a level change using in-game event flags.
+    ///
+    /// These default flags correspond with the edited Site of Grace TalkESD that comes with the mod.
     /// </summary>
-    /// <param name="gameDirectory"></param>
-    public InfiniteNGPlusManager(string gameDirectory)
+    public Dictionary<uint, int> LevelChangeFlags { get; } = new()
     {
-        LastLevelPath = Path.Combine(gameDirectory, "InfiniteNGPlusLevel.txt");
-        
-        Hook = new EldenRingHook(5000, 5000);
-        MonitorThread = new Thread(RunMonitorThread);
+        [18002020] = +5,
+        [18002021] = +1,
+        [18002022] = -1,
+        [18002023] = -5,
+    };
+    
+    // For reference, the new `EventTextForTalk` IDs used in Site of Grace TalkESD:
+    //   [15000650] = "+5 NG Level"
+    //   [15000651] = "+1 NG Level"
+    //   [15000652] = "-1 NG Level"
+    //   [15000653] = "-5 NG Level"
+    //   [15000660] = "Check NG Level"
+    //   [15000670] = "Current NG Level: 4294967295"  // found using prefix and edited in memory
 
-        FlagManager = new FlagManager(Hook);
+    bool EditLevelText { get; }
+    IntPtr LevelTextPointer { get; set; }
+    int LevelTextLength { get; set; }  // excludes null terminator
+
+    public InfiniteNGPlusManager(
+        EldenRingHook hook, FlagManager flagManager, ParamManager paramManager,
+        string lastLevelPath, bool editLevelText = false)
+    {
+        LastLevelPath = lastLevelPath;
+        Hook = hook;
+        FlagManager = flagManager;
+        ParamManager = paramManager;
         
-        List<PARAMDEF> paramdefs = ParamReader.GetParamdefs();
-        ParamManager = new ParamManager(gameDirectory, Hook, paramdefs);
+        RequestedEffectLevel = ReadLevelTextFile();
+        Logging.Info($"Loaded initial NG+ level from file: {RequestedEffectLevel}");
         
-        // We need to read the regulation to get some default values for NG+ scaling.
-        ParamReader paramReader = new(ParamManager.Regulation);
-        PARAM gameAreaParam = paramReader.ReadParamType(ParamType.GameAreaParam);
-        DefaultBossRewards = new Dictionary<long, uint>();
-        // Store default reward values that will be multiplied in memory.
-        foreach (PARAM.Row row in gameAreaParam.Rows)
+        EditLevelText = editLevelText;
+        
+        Hook.OnHooked += OnHooked;
+        Hook.OnUnhooked += OnUnhooked;
+    }
+    
+    /// <summary>
+    /// TODO: Would be great to get real FMG resource offsets.
+    /// </summary>
+    /// <param name="o"></param>
+    /// <param name="e"></param>
+    void OnHooked(object? o, EventArgs? e)
+    {
+        if (!EditLevelText)
+            return;  // nothing to do
+
+        // We search from 0x7FF3... up to the MainModule.
+        IntPtr startAddr = (IntPtr)0x7FF300000000;
+        if (Hook.MainModuleBaseAddress < startAddr)
         {
-            if (!ScalingValues.BossNgRuneScaling.ContainsKey(row.ID))
-                continue;  // not an affected boss
-            DefaultBossRewards[row.ID] = (uint)row["bonusSoul_single"].Value;
+            Logging.Warning("Process main module base address lower than expected. NG+ text update will fail.");
+            return;
         }
-        
-        //PrintVanillaParams();
-        
-        // TODO: Auto `Start()` here for sideload? How does sideload entry point work?
+        ulong regionSize = (ulong)((long)Hook.MainModuleBaseAddress - startAddr);  // guaranteed cast by above check
+        // Convert string 'Current NG Level:' to a Unicode byte array.
+        byte[] textAOB = Encoding.Unicode.GetBytes("Current NG Level: ");
+        Logging.Info("Searching for 'Current NG Level: ' string in game memory (may take ~10 seconds)...");
+        IntPtr levelTextPointer = AOBChunkScanner.SearchMemory(Hook.Process, startAddr, regionSize, textAOB);
+        if (levelTextPointer != IntPtr.Zero)
+        {
+            LevelTextPointer = levelTextPointer;
+            // Find length of level text by finding first double null bytes.
+            int byteCount = 0;
+            while (Kernel32.ReadByte(Hook.Process.Handle, levelTextPointer + byteCount) != 0 ||
+                   Kernel32.ReadByte(Hook.Process.Handle, levelTextPointer + byteCount + 1) != 0)
+                byteCount += 2;
+
+            // Length is in bytes, so divide by 2 to get Unicode character count.
+            LevelTextLength = byteCount / 2;
+            Logging.Info($"--> Success. NG+ Level text will be updated in-game with max length {LevelTextLength}.");
+            return;
+        }
+        Logging.Error("--> Failed to find NG+ level text in game memory. NG+ level will not be displayed in-game.");
+    }
+    
+    void OnUnhooked(object? o, EventArgs? e)
+    {
+        LevelTextPointer = IntPtr.Zero;
+        LevelTextLength = 0;
     }
 
     #region Public Methods
-    public void Start()
-    {
-        Hook.Start();
-        Console.WriteLine("\nSearching for running ELDEN RING process...");
-        while (!Hook.Hooked)
-            Thread.Sleep(100);
-        Console.WriteLine("--> Connected to ELDEN RING successfully.");
-
-        RequestedEffectLevel = ReadLevelTextFile();
-        Console.WriteLine($"# REQUESTED INITIAL NG+ LEVEL: {RequestedEffectLevel}");
-
-        MonitorThread = new Thread(RunMonitorThread);
-        MonitorThread.Start();
-    }
-
-    public void Stop()
-    {
-        StopThread = true;
-        MonitorThread?.Join();
-        MonitorThread = null;
-    }
 
     /// <summary>
     /// Increase (if positive) or decrease (if negative) current NG+ level.
+    ///
+    /// Returns resulting level. Note that if there is no `LastSetEffectLevel`, we assume it to be zero.
     /// </summary>
     /// <param name="levelChange"></param>
     /// <returns></returns>
     public int RequestEffectLevelChange(int levelChange)
     {
+        // If this is the first time we're changing the level, assume it was 0.
+        LastSetEffectLevel ??= 0;
+        
         if (levelChange == 0)
-            return CurrentEffectLevel;
-
-        return RequestEffectLevel(CurrentEffectLevel + levelChange);
+            return LastSetEffectLevel.Value;
+        
+        // Modify `LastSetEffectLevel` by `levelChange`, keeping it in `uint` range.
+        
+        return RequestEffectLevel(LastSetEffectLevel.Value + levelChange);
     }
 
     /// <summary>
-    /// Modify `CurrentEffectLevel` and edit GameParams in memory.
+    /// Modify `RequestedEffectLevel` to trigger an edit in next `OnUpdate()`.
     /// </summary>
     /// <param name="level"></param>
     /// <returns></returns>
     public int RequestEffectLevel(int level)
     {
-        if (level < 0)
-        {
-            Logging.InfoPrint("NG+ level request clamped to minimum (0).");
-            level = 0;
-        }
-
-        if (level == CurrentEffectLevel)
-        {
-            Logging.InfoPrint($"# NG+ level is already set to {level}.");
-            return level;
-        }
-
         RequestedEffectLevel = level;
-        Logging.InfoPrint($"NG+ level requested: {RequestedEffectLevel}");
-
-        // Level has not been set to memory yet, but request can be documented.
-            
+        Logging.Info($"NG+ level requested: {RequestedEffectLevel}");            
         return level;
+    }
+    
+    public uint InternalNewGamePlusLevel
+    {
+        get => Hook.NewGamePlusLevel;
+        set => Hook.NewGamePlusLevel = value;
     }
 
     #endregion
 
-    void RunMonitorThread()
+    protected override bool OnUpdate(long updateTime, long gameLoadedTime)
     {
-        // TODO: This thread will now just need to monitor event flags triggered at Grace.
-
-        while (true)
+        if (!Hook.Loaded)
         {
-            if (StopThread)
-                return;
+            // Can't update until game is loaded. (Yes, Params are loaded anyway, but it's pointless to update them.)
+            return false;
+        }
+        
+        CheckFlagRequests();
+        
+        if (RequestedEffectLevel == null)
+            return true;  // no request to process
+        
+        // Ensure requested level is non-negative.
+        RequestedEffectLevel = Math.Max(0, RequestedEffectLevel.Value);
 
-            if (!Hook.Hooked)
-            {
-                Console.WriteLine("\nLost game connection. Waiting to reconnect...");
-                while (!Hook.Hooked)
-                    Thread.Sleep(100);
-                Console.WriteLine("--> Reconnected to ELDEN RING successfully.");
-            }
+        UpdateParams(RequestedEffectLevel.Value);
+        Logging.Info($"NG+ level updated: {RequestedEffectLevel.Value}");
 
-            if (RequestedEffectLevel == CurrentEffectLevel)
+        UpdateText(RequestedEffectLevel.Value);
+
+        // Record and clear request after it's been processed.
+        LastSetEffectLevel = RequestedEffectLevel;
+        WriteLevelTextFile();  // store mod state
+        RequestedEffectLevel = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Check for level change requests from in-game flags.
+    /// If multiple flags are enabled at once, all the deltas will be applied in sequence.
+    /// </summary>
+    void CheckFlagRequests()
+    {
+        foreach ((uint flag, int levelChange) in LevelChangeFlags)
+        {
+            if (FlagManager.IsEventFlag(flag))
             {
-                Thread.Sleep(100);
-                continue;
+                Logging.Info($"Flag {flag} enabled. Requesting NG+ level change: {levelChange}");
+                RequestEffectLevelChange(levelChange);
+                FlagManager.Disable(flag);
             }
-            CurrentEffectLevel = RequestedEffectLevel;
-            UpdateParams(CurrentEffectLevel);
-            Logging.InfoPrint($"NG+ level updated: {CurrentEffectLevel}"); 
-            WriteLevelTextFile();  // store mod state
-            
-            Thread.Sleep(100);
         }
     }
 
@@ -175,7 +209,20 @@ public class InfiniteNGPlusManager
         // Update SpEffectParam area-based NG+ scaling rows.
         // At level 0, these will all be set to 1f (i.e. REMOVING the default scaling) to simulate NG+0
         // when NG+ is actually activated in the engine.
-        ParamInMemory spEffectParam = ParamManager.GetParam(ParamType.SpEffectParam);
+        ParamInMemory? spEffectParam = ParamManager.GetParam(ParamType.SpEffectParam);
+        if (spEffectParam == null)
+        {
+            Logging.Error("Failed to read SpEffectParam from ELDEN RING game memory.");
+            return;
+        }
+
+        if (!spEffectParam.ContainsRowID(7400))
+        {
+            // Seeing this error sometimes.
+            Logging.Error("SpEffectParam[7400] not found. Cannot apply NG+ scaling. " +
+                          $"SpEffectParam has {spEffectParam.Rows.Count} rows.");
+            return;
+        }
         foreach ((int rowID, Dictionary<string, float> fieldValues) in ScalingValues.AreaInitialScaling)
         {
             foreach ((string fieldName, float ng1Scaling) in fieldValues)
@@ -184,38 +231,117 @@ public class InfiniteNGPlusManager
                 spEffectParam.FastSet(rowID, fieldName, scaledValue);
             }
         }
+        
+        if (spEffectParam.ContainsRowID(20007400))
+        {
+            // DLC scaling rows are present. Update them all.
+            foreach ((int rowID, Dictionary<string, float> fieldValues) in ScalingValues.DLCAreaInitialScaling)
+            {
+                foreach ((string fieldName, float ng1Scaling) in fieldValues)
+                {
+                    float scaledValue = ScalingValues.CalculateStackedScaling(ng1Scaling, fieldName, level);
+                    spEffectParam.FastSet(rowID, fieldName, scaledValue);
+                }
+            }
+        }
+
+        // Update internal NG+ level to either 0 (NG+0) or 1 (all NG+X).
+        // We simulate ALL NG+ levels, including 2-7, in internal NG+1.
+        InternalNewGamePlusLevel = level >= 1 ? (uint)1 : 0;
 
         // Update GameAreaParam boss rune rewards.
         ParamInMemory? gameAreaParam = ParamManager.GetParam(ParamType.GameAreaParam);
         if (gameAreaParam == null)
         {
-            Logging.ErrorPrint("Failed to read GameAreaParam from ELDEN RING game memory.");
+            Logging.Error("Failed to read GameAreaParam from ELDEN RING game memory.");
             return;
         }
-        foreach ((long bossRowID, float runeScaling) in ScalingValues.BossNgRuneScaling)
-        {
-            int defaultRunes = (int)DefaultBossRewards[bossRowID];
-            float rewardScaling = ScalingValues.CalculateStackedScaling(runeScaling, "haveSoulRate", level);
-            uint scaledReward = (uint)(defaultRunes * rewardScaling);
-            
-            gameAreaParam.FastSet((int)bossRowID, "bonusSoul_single", scaledReward);
-            gameAreaParam.FastSet((int)bossRowID, "bonusSoul_multi", scaledReward);
+        
+        foreach ((long bossRowID, float _) in ScalingValues.BossNgRuneScaling)
+            UpdateBossReward(gameAreaParam, (int)bossRowID, level);
 
-            if (bossRowID == 18000850)  // Soldier of Godrick
-                Logging.DebugPrint($"Soldier of Godrick reward: {scaledReward}");
+        if (gameAreaParam.ContainsRowID(20000800))
+        {
+            // DLC boss rows are present. Update them all.
+            foreach ((long bossRowID, float _) in ScalingValues.DLCBossNgRuneScaling)
+                UpdateBossReward(gameAreaParam, (int)bossRowID, level);
         }
+    }
+
+    static void UpdateBossReward(ParamInMemory gameAreaParam, int bossRowID, int level)
+    {
+        // NOTE: NG+1 boss reward scaling seems to be 0.0125 * x^2, where x is the base reward.
+        int defaultBonusSoul = (int)ScalingValues.DefaultBossRewards[bossRowID];
+
+        uint bonusSoul;
+        if (level is 0 or 1)
+        {
+            // We don't touch the reward at NG+0 or NG+1, as NG+1 scaling (or lack thereof) will change the value
+            // appropriately already, and we can't toggle it.
+            bonusSoul = (uint)defaultBonusSoul;
+        }
+        else
+        {
+            float additionalScaling = ScalingValues.CalculateAdditionalBossRewardScaling(level);
+                
+            // NOTE: The internal NG+1 scaling will use `bonusSoul` and `defaultBonusSoul` as follows:
+            // `reward = ng1Scaling * bonusSoul * (bonusSoul / defaultBonusSoul)`
+            // We want `reward = ng1Scaling * additionalScaling * defaultBonusSoul`.
+            // Solving for `bonusSoul`, we get:
+            // `bonusSoul = sqrt(additionalScaling) * defaultBonusSoul`
+            // However, since `bonusSoul` is `uint`, we can't get the precision required to truly bake the
+            // additional scaling into it. So, despite all of that, we just apply the additional scaling as normal
+            // and let the player get a few more Runes than they would in 'natural' NG+2 to NG+7.
+            bonusSoul = (uint)(additionalScaling * defaultBonusSoul);
+        }
+            
+        gameAreaParam.FastSet(bossRowID, "bonusSoul_single", bonusSoul);
+        gameAreaParam.FastSet(bossRowID, "bonusSoul_multi", bonusSoul);
+
+        // if (bossRowID == 18000850) // Soldier of Godrick
+        //     Logging.Debug($"Soldier of Godrick 'bonusSoul': {bonusSoul}");
+    }
+
+    void UpdateText(int level)
+    {
+        if (LevelTextPointer == IntPtr.Zero || LevelTextLength <= 0)
+            return;  // cannot update text (NOTE: might still be searching memory for text)
+        
+        string levelText = $"Current NG Level: {level}";
+        if (levelText.Length > LevelTextLength)
+        {
+            Logging.Warning($"NG+ level text is too long: {levelText}. Cutting down to {LevelTextLength} characters.");
+            levelText = levelText[..LevelTextLength];
+        }
+        else if (levelText.Length < LevelTextLength)
+        {
+            // Pad with early null bytes.
+            levelText += new string('\0', LevelTextLength - levelText.Length);
+        }
+        
+        // Add final expected terminator null byte.
+        levelText += "\0";
+        byte[] levelTextBytes = Encoding.Unicode.GetBytes(levelText);
+        // Validate final length.
+        if (levelTextBytes.Length != LevelTextLength * 2 + 2)  // account for added terminator
+        {
+            Logging.Error($"Final NG+ level text length is incorrect: {levelTextBytes.Length}, should be {LevelTextLength * 2 + 2}");
+            return;
+        }
+        // Write bytes to found text address.
+        Kernel32.WriteBytes(Hook.Process.Handle, LevelTextPointer, levelTextBytes);
     }
 
     void WriteLevelTextFile()
     {
-        File.WriteAllText(LastLevelPath, $"{CurrentEffectLevel}");
+        File.WriteAllText(LastLevelPath, $"{LastSetEffectLevel ?? 0}");
     }
 
-    int ReadLevelTextFile()
+    int? ReadLevelTextFile()
     {
         return File.Exists(LastLevelPath) 
             ? int.Parse(File.ReadAllText(LastLevelPath).Trim()) 
-            : 1;
+            : null;
     }
 
     void PrintVanillaParams(PARAM spEffectParam)

@@ -3,46 +3,6 @@
 internal static class ScalingValues
 {
     /// <summary>
-    /// Calculate scaling from dictionaries below.
-    /// 
-    /// This returns the exact value that should be saved in SpEffectParam.
-    /// </summary>
-    /// <param name="rowId"></param>
-    /// <param name="fieldName"></param>
-    /// <param name="ngPlusLevel"></param>
-    /// <returns></returns>
-    public static float CalculateBasicScaling(int rowId, string fieldName, int ngPlusLevel)
-    {
-        if (ngPlusLevel == 0)
-            // NG, i.e. NG+0: no scaling
-            return 1f;
-            
-        // NG+X scaling varies with area.
-        float scaling = AreaInitialScaling[rowId][fieldName];
-
-        return CalculateStackedScaling(scaling, fieldName, ngPlusLevel);
-    }
-
-    /// <summary>
-    /// Returns the value that should be used to multiply the "bonus soul" fields in GameAreaParam (boss rewards).
-    ///
-    /// This ensures boss rewards are affected by all NG+ levels as well, not just typical enemy rune drops.
-    /// </summary>
-    /// <param name="rowId"></param>
-    /// <param name="ngPlusLevel"></param>
-    /// <returns></returns>
-    public static float CalculateBossRewardScaling(long rowId, int ngPlusLevel)
-    {
-        if (ngPlusLevel == 0)
-            // NG, i.e. NG+0: no scaling
-            return 1f;
-
-        float scaling = BossNgRuneScaling[rowId];
-            
-        return CalculateStackedScaling(scaling, "haveSoulRate", ngPlusLevel);
-    }
-
-    /// <summary>
     /// Modify initial `multiplier` (an area- or boss-specific initial multiplier) according to NG+ level.
     /// </summary>
     /// <param name="multiplier"></param>
@@ -52,9 +12,9 @@ internal static class ScalingValues
     public static float CalculateStackedScaling(float multiplier, string fieldName, int ngPlusLevel)
     {
         if (ngPlusLevel == 0)
-            return 1f;  // no NG+ scaling (not even default values in SpEffectParam rows)
+            return multiplier;  // internal NG+ will be set to zero, so we reset the param to vanilla 
         if (ngPlusLevel == 1)
-            return multiplier;  // applied just once
+            return multiplier;  // applied just once (will be vanilla field value)
 
         // For NG+2 to NG+7, we multiply the scaling value by another multiplier.
         // Note that this is NOT exponential growth.
@@ -67,29 +27,55 @@ internal static class ScalingValues
         return multiplier * (ngPlus7Scaling + additiveScaling);
     }
 
+    /// <summary>
+    /// Boss rewards are multiplied in NG+ by some internal function, which I have loosely copied into the
+    /// `BossNgRuneScaling` dictionary. However, we don't even need that; since the game applies the initial NG+1
+    /// scaling automatically, all we need to do is scale the base reward itself by the 'haveSoulRate'
+    /// `DefaultAdditionalScaling` plus my `CustomAdditionalScaling` for the simulated NG+ level.
+    /// </summary>
+    /// <param name="ngPlusLevel"></param>
+    /// <returns></returns>
+    public static float CalculateAdditionalBossRewardScaling(int ngPlusLevel)
+    {
+        if (ngPlusLevel == 0)
+            return 1f;  // don't modify `GameAreaParam` (internal NG+ level will be set to zero)
+        if (ngPlusLevel == 1)
+            return 1f;  // still don't modify `GameAreaParam` (internal NG+1 scaling is applied automatically)
+
+        // For NG+2 to NG+7, we multiply the scaling value by another multiplier.
+        // Note that this is NOT exponential growth.
+        if (ngPlusLevel <= 7)
+            return DefaultAdditionalScaling["haveSoulRate"][ngPlusLevel - 2];
+
+        // NG+8 to Infinity: we bump up the NG+7 scaling value by a fixed amount per NG+ level.
+        float ngPlus7Scaling = DefaultAdditionalScaling["haveSoulRate"][5];  // for NG+7
+        float additiveScaling = (ngPlusLevel - 7) * CustomAdditionalScaling["haveSoulRate"];
+        return ngPlus7Scaling + additiveScaling;
+    }
+
     // Default NG+X area scaling multipliers (NOT exponents) for NG+2 to NG+7.
     static Dictionary<string, float[]> DefaultAdditionalScaling { get; } = new()
     {
-        ["maxHpRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.4f },
-        ["maxStaminaRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.4f },  // not given in online table; copied from HP
-        ["haveSoulRate"] = new[] { 1.1f, 1.125f, 1.2f, 1.225f, 1.25f, 1.275f },
-        ["physicsAttackPowerRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
-        ["magicAttackPowerRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
-        ["fireAttackPowerRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
-        ["thunderAttackPowerRate"] = new[] { 1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f },
-        ["physicsDiffenceRate"] = new[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
-        ["magicDiffenceRate"] = new[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
-        ["fireDiffenceRate"] = new[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
-        ["thunderDiffenceRate"] = new[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
-        ["staminaAttackRate"] = new[] { 1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f },
-        ["registPoizonChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-        ["registDiseaseChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-        ["registBloodChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-        ["darkDiffenceRate"] = new[] { 1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f },
-        ["darkAttackPowerRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-        ["registFreezeChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-        ["registSleepChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
-        ["registMadnessChangeRate"] = new[] { 1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f },
+        ["maxHpRate"] = [1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.4f],
+        ["maxStaminaRate"] = [1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.4f],  // not given in online table; copied from HP
+        ["haveSoulRate"] = [1.1f, 1.125f, 1.2f, 1.225f, 1.25f, 1.275f],
+        ["physicsAttackPowerRate"] = [1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f],
+        ["magicAttackPowerRate"] = [1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f],
+        ["fireAttackPowerRate"] = [1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f],
+        ["thunderAttackPowerRate"] = [1.1f, 1.15f, 1.2f, 1.3f, 1.35f, 1.45f],
+        ["physicsDiffenceRate"] = [1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f],
+        ["magicDiffenceRate"] = [1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f],
+        ["fireDiffenceRate"] = [1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f],
+        ["thunderDiffenceRate"] = [1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f],
+        ["staminaAttackRate"] = [1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f],
+        ["registPoizonChangeRate"] = [1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f],
+        ["registDiseaseChangeRate"] = [1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f],
+        ["registBloodChangeRate"] = [1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f],
+        ["darkDiffenceRate"] = [1.025f, 1.05f, 1.1f, 1.15f, 1.2f, 1.3f],
+        ["darkAttackPowerRate"] = [1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f],
+        ["registFreezeChangeRate"] = [1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f],
+        ["registSleepChangeRate"] = [1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f],
+        ["registMadnessChangeRate"] = [1.015f, 1.03f, 1.045f, 1.06f, 1.075f, 1.09f],
     };
 
     /// <summary>
@@ -119,6 +105,9 @@ internal static class ScalingValues
         ["registMadnessChangeRate"] = 0.015f,
     };
 
+    /// <summary>
+    /// Vanilla values for 'area' scaling effects 7400-7600 (base game).
+    /// </summary>
     public static Dictionary<int, Dictionary<string, float>> AreaInitialScaling { get; } = new()
     {
         [7400] = new Dictionary<string, float>
@@ -604,12 +593,571 @@ internal static class ScalingValues
             ["registSleepChangeRate"] = 1f,
             ["registMadnessChangeRate"] = 1f,
         },
-            
-        // TODO: New DLC area scaling?
     };
 
+    /// <summary>
+    /// Vanilla values for 'area' scaling effects 7400-7600 (base game).
+    /// </summary>
+    public static Dictionary<int, Dictionary<string, float>> DLCAreaInitialScaling { get; } = new()
+    {
+        
+        [20007400] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0981221f,
+            ["maxStaminaRate"] = 1.065234f,
+            ["physicsAttackPowerRate"] = 1.0237443f,
+            ["magicAttackPowerRate"] = 1.0237443f,
+            ["fireAttackPowerRate"] = 1.0237443f,
+            ["thunderAttackPowerRate"] = 1.0237443f,
+            ["physicsDiffenceRate"] = 1.0276664f,
+            ["magicDiffenceRate"] = 1.0276664f,
+            ["fireDiffenceRate"] = 1.0276664f,
+            ["thunderDiffenceRate"] = 1.0276664f,
+            ["staminaAttackRate"] = 1.0252846f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.18f,
+            ["registDiseaseChangeRate"] = 1.18f,
+            ["registBloodChangeRate"] = 1.18f,
+            ["darkDiffenceRate"] = 1.0276664f,
+            ["darkAttackPowerRate"] = 1.0237443f,
+            ["registFreezeChangeRate"] = 1.18f,
+            ["registSleepChangeRate"] = 1.18f,
+            ["registMadnessChangeRate"] = 1.18f,
+        },
+        [20007410] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0839258f,
+            ["maxStaminaRate"] = 1.0626585f,
+            ["physicsAttackPowerRate"] = 1.0225012f,
+            ["magicAttackPowerRate"] = 1.0225012f,
+            ["fireAttackPowerRate"] = 1.0225012f,
+            ["thunderAttackPowerRate"] = 1.0225012f,
+            ["physicsDiffenceRate"] = 1.0268171f,
+            ["magicDiffenceRate"] = 1.0268171f,
+            ["fireDiffenceRate"] = 1.0268171f,
+            ["thunderDiffenceRate"] = 1.0268171f,
+            ["staminaAttackRate"] = 1.0229326f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.166474f,
+            ["registDiseaseChangeRate"] = 1.166474f,
+            ["registBloodChangeRate"] = 1.166474f,
+            ["darkDiffenceRate"] = 1.0268171f,
+            ["darkAttackPowerRate"] = 1.0225012f,
+            ["registFreezeChangeRate"] = 1.166474f,
+            ["registSleepChangeRate"] = 1.166474f,
+            ["registMadnessChangeRate"] = 1.166474f,
+        },
+        [20007420] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0779487f,
+            ["maxStaminaRate"] = 1.0606076f,
+            ["physicsAttackPowerRate"] = 1.021676f,
+            ["magicAttackPowerRate"] = 1.021676f,
+            ["fireAttackPowerRate"] = 1.021676f,
+            ["thunderAttackPowerRate"] = 1.021676f,
+            ["physicsDiffenceRate"] = 1.0263934f,
+            ["magicDiffenceRate"] = 1.0263934f,
+            ["fireDiffenceRate"] = 1.0263934f,
+            ["thunderDiffenceRate"] = 1.0263934f,
+            ["staminaAttackRate"] = 1.0213766f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.1577142f,
+            ["registDiseaseChangeRate"] = 1.1577142f,
+            ["registBloodChangeRate"] = 1.1577142f,
+            ["darkDiffenceRate"] = 1.0263934f,
+            ["darkAttackPowerRate"] = 1.021676f,
+            ["registFreezeChangeRate"] = 1.1577142f,
+            ["registSleepChangeRate"] = 1.1577142f,
+            ["registMadnessChangeRate"] = 1.1577142f,
+        },
+        [20007430] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0781562f,
+            ["maxStaminaRate"] = 1.0534942f,
+            ["physicsAttackPowerRate"] = 1.0204428f,
+            ["magicAttackPowerRate"] = 1.0204428f,
+            ["fireAttackPowerRate"] = 1.0204428f,
+            ["thunderAttackPowerRate"] = 1.0204428f,
+            ["physicsDiffenceRate"] = 1.0251267f,
+            ["magicDiffenceRate"] = 1.0251267f,
+            ["fireDiffenceRate"] = 1.0251267f,
+            ["thunderDiffenceRate"] = 1.0251267f,
+            ["staminaAttackRate"] = 1.01906f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.1449438f,
+            ["registDiseaseChangeRate"] = 1.1449438f,
+            ["registBloodChangeRate"] = 1.1449438f,
+            ["darkDiffenceRate"] = 1.0251267f,
+            ["darkAttackPowerRate"] = 1.0204428f,
+            ["registFreezeChangeRate"] = 1.1449438f,
+            ["registSleepChangeRate"] = 1.1449438f,
+            ["registMadnessChangeRate"] = 1.1449438f,
+        },
+        [20007440] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0782156f,
+            ["maxStaminaRate"] = 1.0464803f,
+            ["physicsAttackPowerRate"] = 1.0200331f,
+            ["magicAttackPowerRate"] = 1.0200331f,
+            ["fireAttackPowerRate"] = 1.0200331f,
+            ["thunderAttackPowerRate"] = 1.0200331f,
+            ["physicsDiffenceRate"] = 1.0238662f,
+            ["magicDiffenceRate"] = 1.0238662f,
+            ["fireDiffenceRate"] = 1.0238662f,
+            ["thunderDiffenceRate"] = 1.0238662f,
+            ["staminaAttackRate"] = 1.0182925f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.1407821f,
+            ["registDiseaseChangeRate"] = 1.1407821f,
+            ["registBloodChangeRate"] = 1.1407821f,
+            ["darkDiffenceRate"] = 1.0238662f,
+            ["darkAttackPowerRate"] = 1.0200331f,
+            ["registFreezeChangeRate"] = 1.1407821f,
+            ["registSleepChangeRate"] = 1.1407821f,
+            ["registMadnessChangeRate"] = 1.1407821f,
+        },
+        [20007450] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0768288f,
+            ["maxStaminaRate"] = 1.0376052f,
+            ["physicsAttackPowerRate"] = 1.0196241f,
+            ["magicAttackPowerRate"] = 1.0196241f,
+            ["fireAttackPowerRate"] = 1.0196241f,
+            ["thunderAttackPowerRate"] = 1.0196241f,
+            ["physicsDiffenceRate"] = 1.0221951f,
+            ["magicDiffenceRate"] = 1.0221951f,
+            ["fireDiffenceRate"] = 1.0221951f,
+            ["thunderDiffenceRate"] = 1.0221951f,
+            ["staminaAttackRate"] = 1.0175273f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.1366667f,
+            ["registDiseaseChangeRate"] = 1.1366667f,
+            ["registBloodChangeRate"] = 1.1366667f,
+            ["darkDiffenceRate"] = 1.0221951f,
+            ["darkAttackPowerRate"] = 1.0196241f,
+            ["registFreezeChangeRate"] = 1.1366667f,
+            ["registSleepChangeRate"] = 1.1366667f,
+            ["registMadnessChangeRate"] = 1.1366667f,
+        },
+        [20007460] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0770154f,
+            ["maxStaminaRate"] = 1.0337112f,
+            ["physicsAttackPowerRate"] = 1.0179944f,
+            ["magicAttackPowerRate"] = 1.0179944f,
+            ["fireAttackPowerRate"] = 1.0179944f,
+            ["thunderAttackPowerRate"] = 1.0179944f,
+            ["physicsDiffenceRate"] = 1.0209489f,
+            ["magicDiffenceRate"] = 1.0209489f,
+            ["fireDiffenceRate"] = 1.0209489f,
+            ["thunderDiffenceRate"] = 1.0209489f,
+            ["staminaAttackRate"] = 1.0167644f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.1206522f,
+            ["registDiseaseChangeRate"] = 1.1206522f,
+            ["registBloodChangeRate"] = 1.1206522f,
+            ["darkDiffenceRate"] = 1.0209489f,
+            ["darkAttackPowerRate"] = 1.0179944f,
+            ["registFreezeChangeRate"] = 1.1206522f,
+            ["registSleepChangeRate"] = 1.1206522f,
+            ["registMadnessChangeRate"] = 1.1206522f,
+        },
+        [20007470] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0771002f,
+            ["maxStaminaRate"] = 1.0298479f,
+            ["physicsAttackPowerRate"] = 1.0171835f,
+            ["magicAttackPowerRate"] = 1.0171835f,
+            ["fireAttackPowerRate"] = 1.0171835f,
+            ["thunderAttackPowerRate"] = 1.0171835f,
+            ["physicsDiffenceRate"] = 1.0197088f,
+            ["magicDiffenceRate"] = 1.0197088f,
+            ["fireDiffenceRate"] = 1.0197088f,
+            ["thunderDiffenceRate"] = 1.0197088f,
+            ["staminaAttackRate"] = 1.0160037f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.1129032f,
+            ["registDiseaseChangeRate"] = 1.1129032f,
+            ["registBloodChangeRate"] = 1.1129032f,
+            ["darkDiffenceRate"] = 1.0197088f,
+            ["darkAttackPowerRate"] = 1.0171835f,
+            ["registFreezeChangeRate"] = 1.1129032f,
+            ["registSleepChangeRate"] = 1.1129032f,
+            ["registMadnessChangeRate"] = 1.1129032f,
+        },
+        [20007480] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0693364f,
+            ["maxStaminaRate"] = 1.0260147f,
+            ["physicsAttackPowerRate"] = 1.0163752f,
+            ["magicAttackPowerRate"] = 1.0163752f,
+            ["fireAttackPowerRate"] = 1.0163752f,
+            ["thunderAttackPowerRate"] = 1.0163752f,
+            ["physicsDiffenceRate"] = 1.0184746f,
+            ["magicDiffenceRate"] = 1.0184746f,
+            ["fireDiffenceRate"] = 1.0184746f,
+            ["thunderDiffenceRate"] = 1.0184746f,
+            ["staminaAttackRate"] = 1.0152454f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.1053191f,
+            ["registDiseaseChangeRate"] = 1.1053191f,
+            ["registBloodChangeRate"] = 1.1053191f,
+            ["darkDiffenceRate"] = 1.0184746f,
+            ["darkAttackPowerRate"] = 1.0163752f,
+            ["registFreezeChangeRate"] = 1.1053191f,
+            ["registSleepChangeRate"] = 1.1053191f,
+            ["registMadnessChangeRate"] = 1.1053191f,
+        },
+        [20007490] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0541972f,
+            ["maxStaminaRate"] = 1.0222114f,
+            ["physicsAttackPowerRate"] = 1.0147662f,
+            ["magicAttackPowerRate"] = 1.0147662f,
+            ["fireAttackPowerRate"] = 1.0147662f,
+            ["thunderAttackPowerRate"] = 1.0147662f,
+            ["physicsDiffenceRate"] = 1.0172464f,
+            ["magicDiffenceRate"] = 1.0172464f,
+            ["fireDiffenceRate"] = 1.0172464f,
+            ["thunderDiffenceRate"] = 1.0172464f,
+            ["staminaAttackRate"] = 1.0144893f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.090625f,
+            ["registDiseaseChangeRate"] = 1.090625f,
+            ["registBloodChangeRate"] = 1.090625f,
+            ["darkDiffenceRate"] = 1.0172464f,
+            ["darkAttackPowerRate"] = 1.0147662f,
+            ["registFreezeChangeRate"] = 1.090625f,
+            ["registSleepChangeRate"] = 1.090625f,
+            ["registMadnessChangeRate"] = 1.090625f,
+        },
+        [20007500] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0456709f,
+            ["maxStaminaRate"] = 1.0184376f,
+            ["physicsAttackPowerRate"] = 1.0139655f,
+            ["magicAttackPowerRate"] = 1.0139655f,
+            ["fireAttackPowerRate"] = 1.0139655f,
+            ["thunderAttackPowerRate"] = 1.0139655f,
+            ["physicsDiffenceRate"] = 1.0160241f,
+            ["magicDiffenceRate"] = 1.0160241f,
+            ["fireDiffenceRate"] = 1.0160241f,
+            ["thunderDiffenceRate"] = 1.0160241f,
+            ["staminaAttackRate"] = 1.0137355f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.0835052f,
+            ["registDiseaseChangeRate"] = 1.0835052f,
+            ["registBloodChangeRate"] = 1.0835052f,
+            ["darkDiffenceRate"] = 1.0160241f,
+            ["darkAttackPowerRate"] = 1.0139655f,
+            ["registFreezeChangeRate"] = 1.0835052f,
+            ["registSleepChangeRate"] = 1.0835052f,
+            ["registMadnessChangeRate"] = 1.0835052f,
+        },
+        [20007510] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0388143f,
+            ["maxStaminaRate"] = 1.0146931f,
+            ["physicsAttackPowerRate"] = 1.0131674f,
+            ["magicAttackPowerRate"] = 1.0131674f,
+            ["fireAttackPowerRate"] = 1.0131674f,
+            ["thunderAttackPowerRate"] = 1.0131674f,
+            ["physicsDiffenceRate"] = 1.0148077f,
+            ["magicDiffenceRate"] = 1.0148077f,
+            ["fireDiffenceRate"] = 1.0148077f,
+            ["thunderDiffenceRate"] = 1.0148077f,
+            ["staminaAttackRate"] = 1.0129839f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.0765306f,
+            ["registDiseaseChangeRate"] = 1.0765306f,
+            ["registBloodChangeRate"] = 1.0765306f,
+            ["darkDiffenceRate"] = 1.0148077f,
+            ["darkAttackPowerRate"] = 1.0131674f,
+            ["registFreezeChangeRate"] = 1.0765306f,
+            ["registSleepChangeRate"] = 1.0765306f,
+            ["registMadnessChangeRate"] = 1.0765306f,
+        },
+        [20007520] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0313383f,
+            ["maxStaminaRate"] = 1.0109774f,
+            ["physicsAttackPowerRate"] = 1.0123718f,
+            ["magicAttackPowerRate"] = 1.0123718f,
+            ["fireAttackPowerRate"] = 1.0123718f,
+            ["thunderAttackPowerRate"] = 1.0123718f,
+            ["physicsDiffenceRate"] = 1.0135971f,
+            ["magicDiffenceRate"] = 1.0135971f,
+            ["fireDiffenceRate"] = 1.0135971f,
+            ["thunderDiffenceRate"] = 1.0135971f,
+            ["staminaAttackRate"] = 1.0122347f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.069697f,
+            ["registDiseaseChangeRate"] = 1.069697f,
+            ["registBloodChangeRate"] = 1.069697f,
+            ["darkDiffenceRate"] = 1.0135971f,
+            ["darkAttackPowerRate"] = 1.0123718f,
+            ["registFreezeChangeRate"] = 1.069697f,
+            ["registSleepChangeRate"] = 1.069697f,
+            ["registMadnessChangeRate"] = 1.069697f,
+        },
+        [20007530] = new Dictionary<string, float>
+        {
+            ["maxHpRate"] = 1.0206945f,
+            ["maxStaminaRate"] = 1.0072901f,
+            ["physicsAttackPowerRate"] = 1.011183f,
+            ["magicAttackPowerRate"] = 1.011183f,
+            ["fireAttackPowerRate"] = 1.011183f,
+            ["thunderAttackPowerRate"] = 1.011183f,
+            ["physicsDiffenceRate"] = 1.0123924f,
+            ["magicDiffenceRate"] = 1.0123924f,
+            ["fireDiffenceRate"] = 1.0123924f,
+            ["thunderDiffenceRate"] = 1.0123924f,
+            ["staminaAttackRate"] = 1.0114875f,
+            ["haveSoulRate"] = 2f,
+            ["registPoizonChangeRate"] = 1.0597014f,
+            ["registDiseaseChangeRate"] = 1.0597014f,
+            ["registBloodChangeRate"] = 1.0597014f,
+            ["darkDiffenceRate"] = 1.0123924f,
+            ["darkAttackPowerRate"] = 1.011183f,
+            ["registFreezeChangeRate"] = 1.0597014f,
+            ["registSleepChangeRate"] = 1.0597014f,
+            ["registMadnessChangeRate"] = 1.0597014f,
+        },
+    };
+    
+    /// <summary>
+    /// Default (single-player) 'bonusSoul' rune rewards for every boss.
+    ///
+    /// Not separated into base and DLC, since it is not used for iteration.
+    /// </summary>
+    public static Dictionary<long, uint> DefaultBossRewards { get; } = new()
+    {
+        // Base
+        [10000800] = 20000,
+        [10000850] = 12000,
+        [10010800] = 3200,
+        [11000800] = 120000,
+        [11000850] = 80000,
+        [11050800] = 300000,
+        [11050850] = 150000,
+        [12010800] = 12000,
+        [12010850] = 58000,
+        [12020800] = 30000,
+        [12020830] = 16000,
+        [12020850] = 10000,
+        [12030390] = 25000,
+        [12030800] = 40000,
+        [12030850] = 90000,
+        [12040800] = 80000,
+        [12050800] = 420000,
+        [12080800] = 13000,
+        [12090800] = 24000,
+        [13000800] = 220000,
+        [13000830] = 280000,
+        [13000850] = 170000,
+        [14000800] = 40000,
+        [14000850] = 14000,
+        [15000800] = 480000,
+        [15000850] = 200000,
+        [16000800] = 130000,
+        [16000850] = 50000,
+        [16000860] = 10000,
+        [18000800] = 15000,
+        [18000850] = 400,
+        [19000800] = 500000,
+        // DLC
+        [20000800] = 120000,  // [Belurat, Tower Settlement] Divine Beast Dancing Lion
+        [20010800] = 500000,  // [Enir-Ilim] Promised Consort Radahn
+        [20010850] = 0,  // unused?
+        [21000850] = 200000,  // [Shadow Keep] Golden Hippopotamus
+        [21010800] = 400000,  // [Specimen Storehouse] Messmer the Impaler
+        [22000800] = 220000,  // [Stone Coffin Fissure] Putrescent Knight
+        [25000800] = 420000,  // [Finger Birthing Grounds] Metyr, Mother of Fingers
+        [28000800] = 410000,  // [Midra's Manse] Midra, Lord of Frenzied Flame
+        // Base
+        [30000800] = 2200,
+        [30010800] = 2400,
+        [30020800] = 1300,
+        [30030800] = 3000,
+        [30040800] = 1700,
+        [30050800] = 3500,
+        [30050850] = 4200,
+        [30060800] = 3200,
+        [30070800] = 12000,
+        [30080800] = 20000,
+        [30090800] = 21000,
+        [30100800] = 28000,
+        [30100801] = 0,
+        [30110800] = 1600,
+        [30120800] = 9400,
+        [30120801] = 0,
+        [30130800] = 15000,
+        [30140800] = 7400,
+        [30150800] = 6800,
+        [30160800] = 64000,
+        [30170800] = 83000,
+        [30180800] = 48000,
+        [30190800] = 78000,
+        [30200800] = 50000,
+        [31000800] = 0,
+        [31010800] = 2600,
+        [31020800] = 2100,
+        [31030800] = 1000,
+        [31040800] = 3300,
+        [31050800] = 3600,
+        [31060800] = 3300,
+        [31070800] = 10000,
+        [31090800] = 11000,
+        [31100800] = 65000,
+        [31110800] = 7100,
+        [31120800] = 93000,
+        [31150800] = 1200,
+        [31170800] = 1700,
+        [31180800] = 8400,
+        [31190800] = 9000,
+        [31190850] = 9000,
+        [31200800] = 7000,
+        [31210800] = 6700,
+        [31220800] = 70000,
+        [32000800] = 2000,
+        [32010800] = 1800,
+        [32020800] = 3000,
+        [32040800] = 9600,
+        [32050800] = 9000,
+        [32050801] = 0,
+        [32070800] = 7500,
+        [32080800] = 7600,
+        [32110800] = 120000,
+        [34120800] = 16000,
+        [34130800] = 94000,
+        [34140850] = 29000,
+        [35000800] = 100000,
+        [35000850] = 30000,
+        [39200800] = 24000,
+        // DLC
+        [40000800] = 110000,  // [Fog Rift Catacombs] Death Knight
+        [40010800] = 130000,  // [Scorpion River Catacombs] Death Knight
+        [41000800] = 80000,  // [Belurat Gaol] Demi-Human Swordmaster Onze
+        [41010800] = 100000,  // [Bonny Gaol] Curseblade Labirith
+        [41020800] = 160000,  // [Lamenter's Gaol] Lamenter (NOTE: has no multi reward by default) 
+        [43000800] = 80000,  // [Rivermouth Cave] Chief Bloodfiend
+        [43010800] = 130000,  // [Dragon's Pit] Ancient Dragon-man
+        // Base
+        [1033420800] = 80000,
+        [1033430800] = 5800,
+        [1033450800] = 4600,
+        [1034420800] = 120000,
+        [1034450800] = 14000,
+        [1034480800] = 3100,
+        [1034500800] = 12000,
+        [1035420800] = 4900,
+        [1035500800] = 10000,
+        [1035530800] = 19000,
+        [1036450340] = 7800,
+        [1036480340] = 5600,
+        [1036500800] = 3600,
+        [1036540800] = 21000,
+        [1037420340] = 6600,
+        [1037460800] = 6000,
+        [1037510800] = 60000,
+        [1037530800] = 13000,
+        [1037540810] = 18000,
+        [1038410800] = 3800,
+        [1038480800] = 5800,
+        [1038510800] = 8500,
+        [1038520340] = 14000,
+        [1039430340] = 5600,
+        [1039440800] = 4700,
+        [1039500800] = 26000,
+        [1039510800] = 10000,
+        [1039540800] = 24000,
+        [1040520800] = 10800,
+        [1040530800] = 8800,
+        [1041500800] = 11000,
+        [1041510800] = 20000,
+        [1041520800] = 60000,
+        [1041530800] = 10000,
+        [1042330800] = 5400,
+        [1042360800] = 3200,
+        [1042370800] = 2100,
+        [1042380800] = 2800,
+        [1042380850] = 2700,
+        [1042550800] = 14000,
+        [1043300800] = 3800,
+        [1043330800] = 3600,
+        [1043360800] = 5000,
+        [1043370340] = 2400,
+        [1043530800] = 20000,
+        [1044320340] = 3900,
+        [1044320342] = 3400,
+        [1044350800] = 1900,
+        [1044360800] = 1100,
+        [1044530800] = 29000,
+        [1045390800] = 2400,
+        [1045520800] = 50000,
+        [1047400800] = 9600,
+        [1048370800] = 38000,
+        [1048400800] = 6300,
+        [1048410800] = 50000,
+        [1048510800] = 36000,
+        [1048570800] = 220000,
+        [1049370800] = 8500,
+        [1049370850] = 15000,
+        [1049380800] = 12000,
+        [1049390800] = 6400,
+        [1049390850] = 7800,
+        [1049520800] = 60000,
+        [1050560800] = 180000,
+        [1050570800] = 77000,
+        [1050570850] = 160000,
+        [1051360800] = 16000,
+        [1051400800] = 91000,
+        [1051430800] = 88000,
+        [1051570800] = 90000,
+        [1052380800] = 70000,
+        [1052410800] = 80000,
+        [1052410850] = 42000,
+        [1052520800] = 180000,
+        [1052560800] = 70000,
+        [1053560800] = 75000,
+        [1054560800] = 100000,
+        [1248550800] = 84000,
+        // DLC
+        [2044450800] = 380000,  // [Ancient Ruins of Rauh] Romina, Saint of the Bud 
+        [2044470800] = 210000,  // [Ancient Ruins of Rauh] Rugalea the Great Red Bear 
+        [2045440800] = 100000,  // [Gravesite Plain] Ghostflame Dragon 
+        [2046380800] = 80000,  // [Cerulean Coast] Dancer of Ranah 
+        [2046400800] = 100000,  // [Cerulean Coast] Demi-Human Queen Marigga 
+        [2046410800] = 70000,  // [Gravesite Plain] Knight of the Solitary Gaol (NO MULTI) 
+        [2046450800] = 80000,  // [Gravesite Plain] Red Bear 
+        [2046460800] = 180000,  // [Gravesite Plain] Divine Beast Dancing Lion (NO MULTI)
+        [2047390800] = 230000,  // [Cerulean Coast] Death Rite Bird 
+        [2047450800] = 80000,  // [Scadu Altus] Black Knight Garrew 
+        [2048380850] = 120000,  // [Cerulean Coast] Ghostflame Dragon 
+        [2048440800] = 240000,  // [Gravesite Plain] Rellana, Twin Moon Knight 
+        [2049410800] = 90000,  // [Jagged Peak] Jagged Peak Drake (Solo 
+        [2049430800] = 120000,  // [Moorth Highway] Ghostflame Dragon 
+        [2049430850] = 80000,  // [Scadu Altus] Black Knight Edredd 
+        [2049450800] = 180000,  // [Scadu Altus] Ralva the Great Red Bear 
+        [2049480800] = 230000,  // [Scadu Altus] Commander Gaius 
+        [2050470800] = 120000,  // [Hinterland] Tree Sentinel - Torch 
+        [2050480800] = 260000,  // [Scaduview] Scadutree Avatar 
+        [2050480860] = 120000,  // [Hinterland] Tree Sentinel 
+        [2051440800] = 90000,  // [Scadu Altus] Rakshasa 
+        [2051450720] = 210000,  // unknown 
+        [2052400800] = 120000,  // [Jagged Peak] Jagged Peak Drake (Duo) 
+        [2052430800] = 260000,  // [Abyssal Woods] Jori, the Elder Inquisitor 
+        [2052480800] = 170000,  // [Finger Ruins] Fallingstar Beast (NO MULTI)
+        [2054390800] = 490000,  // [Jagged Peak] Bayle the Dread 
+        [2054390850] = 200000,  // [Jagged Peak] Ancient Dragon Senessax 
+    };
+
+    /// <summary>
+    /// Initial (NG+1) scaling for every boss.
+    /// </summary>
     public static readonly Dictionary<long, float> BossNgRuneScaling = new()
     {
+        // Base
         [10000800] = 4f, // Godrick the Grafted - Stormveil Castle
         [10000850] = 4f, // Margit, the Fell Omen - Stormveil Castle
         [10010800] = 5f, // Grafted Scion - Chapel of Anticipation
@@ -780,13 +1328,60 @@ internal static class ScalingValues
         [1053560800] = 2f, // Roundtable Knight Vyke - Lord Contender's Evergaol (Mountaintops)
         [1054560800] = 2f, // Borealis the Freezing Fog - Freezing Fields (Mountaintops)
         [1248550800] = 2f, // Night's Cavalry - Sourthwest (Mountaintops)
+       
+    };
 
-        // TODO: New DLC bosses.
+    /// <summary>
+    /// NOTE: All DLC boss use the 'base endgame' 2x scaling for now. Not sure if this is correct.
+    /// </summary>
+    public static readonly Dictionary<long, float> DLCBossNgRuneScaling = new()
+    {
+        [20000800] = 2f, // [Belurat, Tower Settlement] Divine Beast Dancing Lion
+        [20010800] = 2f, // [Enir-Ilim] Promised Consort Radahn
+        [20010850] = 2f, // unused?
+        [21000850] = 2f, // [Shadow Keep] Golden Hippopotamus
+        [21010800] = 2f, // [Specimen Storehouse] Messmer the Impaler
+        [22000800] = 2f, // [Stone Coffin Fissure] Putrescent Knight
+        [25000800] = 2f, // [Finger Birthing Grounds] Metyr, Mother of Fingers
+        [28000800] = 2f, // [Midra's Manse] Midra, Lord of Frenzied Flame
+        [40000800] = 2f, // [Fog Rift Catacombs] Death Knight
+        [40010800] = 2f, // [Scorpion River Catacombs] Death Knight
+        [41000800] = 2f, // [Belurat Gaol] Demi-Human Swordmaster Onze
+        [41010800] = 2f, // [Bonny Gaol] Curseblade Labirith
+        [41020800] = 2f, // [Lamenter's Gaol] Lamenter (NOTE: has no multi reward by default) 
+        [43000800] = 2f, // [Rivermouth Cave] Chief Bloodfiend
+        [43010800] = 2f, // [Dragon's Pit] Ancient Dragon-man
+        [2044450800] = 2f, // [Ancient Ruins of Rauh] Romina, Saint of the Bud
+        [2044470800] = 2f, // [Ancient Ruins of Rauh] Rugalea the Great Red Bear
+        [2045440800] = 2f, // [Gravesite Plain] Ghostflame Dragon
+        [2046380800] = 2f, // [Cerulean Coast] Dancer of Ranah
+        [2046400800] = 2f, // [Cerulean Coast] Demi-Human Queen Marigga
+        [2046410800] = 2f, // [Gravesite Plain] Knight of the Solitary Gaol (NO MULTI)
+        [2046450800] = 2f, // [Gravesite Plain] Red Bear
+        [2046460800] = 2f, // [Gravesite Plain] Divine Beast Dancing Lion (NO MULTI)
+        [2047390800] = 2f, // [Cerulean Coast] Death Rite Bird
+        [2047450800] = 2f, // [Scadu Altus] Black Knight Garrew
+        [2048380850] = 2f, // [Cerulean Coast] Ghostflame Dragon
+        [2048440800] = 2f, // [Gravesite Plain] Rellana, Twin Moon Knight
+        [2049410800] = 2f, // [Jagged Peak] Jagged Peak Drake (Solo
+        [2049430800] = 2f, // [Moorth Highway] Ghostflame Dragon
+        [2049430850] = 2f, // [Scadu Altus] Black Knight Edredd
+        [2049450800] = 2f, // [Scadu Altus] Ralva the Great Red Bear
+        [2049480800] = 2f, // [Scadu Altus] Commander Gaius
+        [2050470800] = 2f, // [Hinterland] Tree Sentinel - Torch
+        [2050480800] = 2f, // [Scaduview] Scadutree Avatar
+        [2050480860] = 2f, // [Hinterland] Tree Sentinel
+        [2051440800] = 2f, // [Scadu Altus] Rakshasa
+        [2051450720] = 2f, // unknown
+        [2052400800] = 2f, // [Jagged Peak] Jagged Peak Drake (Duo)
+        [2052430800] = 2f, // [Abyssal Woods] Jori, the Elder Inquisitor
+        [2052480800] = 2f, // [Finger Ruins] Fallingstar Beast (NO MULTI)
+        [2054390800] = 2f, // [Jagged Peak] Bayle the Dread
+        [2054390850] = 2f, // [Jagged Peak] Ancient Dragon Senessax
     };
     
     /// <summary>
-    /// Different levels of NG+ scaling (area-dependent) in SpEffectParam.
-    /// TODO: DLC levels?
+    /// Different levels of NG+ scaling (area-dependent) in SpEffectParam (base game).
     /// </summary>
     public static int[] ScalingEffectRows { get; } =
     [
@@ -796,9 +1391,21 @@ internal static class ScalingValues
     ];
     
     /// <summary>
+    /// Different levels of NG+ scaling (area-dependent) in SpEffectParam (base game).
+    ///
+    /// The final level, 7530, is used for Bayle the Dread only.
+    /// </summary>
+    public static int[] DLCScalingEffectRows { get; } =
+    [
+        20007400, 20007410, 20007420, 20007430, 20007440, 20007450, 20007460, 20007470, 20007480, 20007490,
+        20007500, 20007510, 20007520, 20007530,
+    ];
+    
+    /// <summary>
     /// All the SpEffectParam fields that change in NG+ effects.
     /// </summary>
-    public static string[] EffectFields { get; } = {
+    public static string[] EffectFields { get; } =
+    [
         "maxHpRate",
         "maxStaminaRate",
         "haveSoulRate",
@@ -819,5 +1426,5 @@ internal static class ScalingValues
         "registFreezeChangeRate",
         "registSleepChangeRate",
         "registMadnessChangeRate",
-    };
+    ];
 }
