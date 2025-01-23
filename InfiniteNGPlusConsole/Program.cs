@@ -133,15 +133,19 @@ internal static partial class Program
         
         Console.WriteLine(TitleText);
         
-        Hook = new EldenRingHook(1000, 1000);
+        Hook = new EldenRingHook(1000, 1000)
+        {
+            // We wait for the game to have been loaded for at least 3 seconds before hooking.
+            // Otherwise, Params and FMGs may still be loading.
+            MinLifetime = 3000,
+        };
         FlagManager = new FlagManager(Hook);
         PlayerManager = new PlayerManager(Hook);
         EnemyMonitor = new EnemyMonitor(Hook);
         Dictionary<string, PARAMDEF> paramdefs = ParamReader.GetParamdefs();
         ParamManager = new ParamManager(Hook, paramdefs.Values.ToList());
         
-        InfiniteNgPlusManager = new InfiniteNGPlusManager(
-            Hook, FlagManager, ParamManager, "LAST_NG_LEVEL.cfg", editLevelText: true);
+        InfiniteNgPlusManager = new InfiniteNGPlusManager(Hook, FlagManager, ParamManager, editLevelText: true);
         
         // Start update thread.
         HookAndStartUpdate();
@@ -347,18 +351,20 @@ internal static partial class Program
             Match match = SetLevelRe.Match(cmd);
             if (match.Success)
             {
-                int level = int.Parse(match.Groups[2].Value);
                 switch (match.Groups[1].Value)
                 {
                     case "+":
-                        Logging.Info($"Increment by {level}");
-                        InfiniteNgPlusManager.RequestEffectLevelChange(level);
+                        int increment = int.Parse(match.Groups[2].Value);
+                        Logging.Info($"Increment by {increment}");
+                        InfiniteNgPlusManager.RequestEffectLevelChange(increment);
                         break;
                     case "-":
-                        Logging.Info($"Decrement by {level}");
-                        InfiniteNgPlusManager.RequestEffectLevelChange(-level);
+                        int decrement = int.Parse(match.Groups[2].Value);
+                        Logging.Info($"Decrement by {decrement}");
+                        InfiniteNgPlusManager.RequestEffectLevelChange(-decrement);
                         break;
                     case "=":
+                        uint level = uint.Parse(match.Groups[2].Value);
                         Logging.Info($"Set to {level}");
                         InfiniteNgPlusManager.RequestEffectLevel(level);
                         break;

@@ -9,7 +9,7 @@ internal static class ScalingValues
     /// <param name="fieldName"></param>
     /// <param name="ngPlusLevel"></param>
     /// <returns></returns>
-    public static float CalculateStackedScaling(float multiplier, string fieldName, int ngPlusLevel)
+    public static float CalculateStackedScaling(float multiplier, string fieldName, long ngPlusLevel)
     {
         if (ngPlusLevel == 0)
             return multiplier;  // internal NG+ will be set to zero, so we reset the param to vanilla 
@@ -35,7 +35,7 @@ internal static class ScalingValues
     /// </summary>
     /// <param name="ngPlusLevel"></param>
     /// <returns></returns>
-    public static float CalculateAdditionalBossRewardScaling(int ngPlusLevel)
+    public static float CalculateAdditionalBossRewardScaling(long ngPlusLevel)
     {
         if (ngPlusLevel == 0)
             return 1f;  // don't modify `GameAreaParam` (internal NG+ level will be set to zero)
